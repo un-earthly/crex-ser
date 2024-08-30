@@ -109,60 +109,60 @@ app.post('/api/clickReadMore', async (req, res) => {
 
 
 
-// app.get('/api/news-blogs', async (req, res) => {
-//     try {
+app.get('/api/news-blogs', async (req, res) => {
+    try {
 
-//         const browser = await puppeteer.launch({
-//             args: chromium.args,
-//             defaultViewport: chromium.defaultViewport,
-//             executablePath: await chromium.executablePath(),
-//             headless: chromium.headless,
-//             ignoreHTTPSErrors: true,
-//         });
-//         const page = await browser.newPage();
+        const browser = await puppeteer.launch({
+            args: chromium.args,
+            defaultViewport: chromium.defaultViewport,
+            executablePath: await chromium.executablePath(),
+            headless: chromium.headless,
+            ignoreHTTPSErrors: true,
+        });
+        const page = await browser.newPage();
 
-//         // Go to the target URL
-//         await page.goto('https://crex.live/', { waitUntil: 'domcontentloaded' });
+        // Go to the target URL
+        await page.goto('https://crex.live/', { waitUntil: 'domcontentloaded' });
 
-//         // Wait for the necessary elements to load
-//         await page.waitForSelector('section.news-topic-wrapper');
+        // Wait for the necessary elements to load
+        await page.waitForSelector('section.news-topic-wrapper');
 
-//         // Scrape the data
-//         const data = await page.evaluate(() => {
-//             const cards = [];
-//             const cardElements = document.querySelectorAll('section.news-topic-wrapper .card-wrapper');
+        // Scrape the data
+        const data = await page.evaluate(() => {
+            const cards = [];
+            const cardElements = document.querySelectorAll('section.news-topic-wrapper .card-wrapper');
 
-//             cardElements.forEach(card => {
-//                 const title = card.querySelector('.heading h2').innerText.trim();
-//                 const imageUrl = card.querySelector('.news-card-img img').src;
-//                 const link = card.querySelector('.news-card-img a').href;
-//                 const tags = Array.from(card.querySelectorAll('.news-tag ul li a')).map(tag => tag.innerText.trim());
-//                 const description = card.querySelector('.news-heading p').innerText.trim();
-//                 const time = card.querySelector('.news-time span').innerText.trim();
+            cardElements.forEach(card => {
+                const title = card.querySelector('.heading h2').innerText.trim();
+                const imageUrl = card.querySelector('.news-card-img img').src;
+                const link = card.querySelector('.news-card-img a').href;
+                const tags = Array.from(card.querySelectorAll('.news-tag ul li a')).map(tag => tag.innerText.trim());
+                const description = card.querySelector('.news-heading p').innerText.trim();
+                const time = card.querySelector('.news-time span').innerText.trim();
 
-//                 cards.push({
-//                     title,
-//                     imageUrl,
-//                     link,
-//                     tags,
-//                     description,
-//                     time
-//                 });
-//             });
+                cards.push({
+                    title,
+                    imageUrl,
+                    link,
+                    tags,
+                    description,
+                    time
+                });
+            });
 
-//             return cards;
-//         });
+            return cards;
+        });
 
-//         // Close the browser
-//         await browser.close();
+        // Close the browser
+        await browser.close();
 
-//         // Send the scraped data as a response
-//         res.json(data);
-//     } catch (error) {
-//         console.error('Error scraping the data:', error);
-//         res.status(500).json({ error: 'Failed to scrape the data' });
-//     }
-// });
+        // Send the scraped data as a response
+        res.json(data);
+    } catch (error) {
+        console.error('Error scraping the data:', error);
+        res.status(500).json({ error: 'Failed to scrape the data' });
+    }
+});
 const cache = new NodeCache({ stdTTL: 3600 });
 
 async function matchesScrapper(url) {
@@ -318,9 +318,8 @@ function getCacheStats() {
     return cache.getStats();
 }
 async function scrapeRankings(url) {
-    const browser = await puppeteer.launch({ headless: "new" });
+    const browser = await puppeteer.launch({ headless: "true" });
     const page = await browser.newPage();
-
     try {
         await page.goto(url, { waitUntil: 'networkidle0' });
 
@@ -388,20 +387,13 @@ async function scrapeRankings(url) {
     }
 }
 
-async function scrapeCricketRankings() {
-    const cacheKey = 'cricket_rankings';
-    const cachedData = cache.get(cacheKey);
-
-    if (cachedData) {
-        console.log('Returning cached data');
-        return cachedData;
-    }
+async function scrapeCricketRankings(url) {
 
     const browser = await puppeteer.launch();
     const page = await browser.newPage();
 
     try {
-        await page.goto('https://crex.live/rankings/men/teams', { waitUntil: 'networkidle0' });
+        await page.goto(url, { waitUntil: 'networkidle0' });
 
         const rankings = await page.evaluate(() => {
             const tabContainers = document.querySelectorAll('.card_wrapper');
@@ -411,6 +403,7 @@ async function scrapeCricketRankings() {
                 const tabName = container.querySelector('.type').textContent.trim();
                 const topTeam = container.querySelector('.team_full_name').textContent.trim();
                 const topTeamRating = container.querySelector('.number').textContent.trim();
+                const topTeamImg = container.querySelector('.flag').src
 
                 const tableRows = container.querySelectorAll('table tbody tr');
                 const teamsData = Array.from(tableRows).map((row) => {
@@ -418,14 +411,16 @@ async function scrapeCricketRankings() {
                     return {
                         rank: columns[0].textContent.trim(),
                         team: columns[1].querySelector('.t_name').textContent.trim(),
-                        rating: columns[2].textContent.trim()
+                        flag: columns[1].querySelector('img').src,
+                        rating: columns[2].textContent.trim(),
                     };
                 });
 
                 result[tabName] = {
                     top_team: {
                         name: topTeam,
-                        rating: topTeamRating
+                        rating: topTeamRating,
+                        img: topTeamImg
                     },
                     rankings: teamsData
                 };
@@ -433,9 +428,6 @@ async function scrapeCricketRankings() {
 
             return result;
         });
-
-        // Cache the results
-        cache.set(cacheKey, rankings);
 
         await browser.close();
         return rankings;
@@ -1182,6 +1174,79 @@ const validateParams = (req, res, next) => {
 // Helper function to get cache key
 const getCacheKey = (slug, subSlug, subroute) => `${slug}:${subSlug}:${subroute}`;
 
+
+async function scrapeCricketMatches() {
+    const browser = await puppeteer.launch({ headless: true });
+    const page = await browser.newPage();
+    await page.goto(process.env.BASE + '/fixtures/match-list', { waitUntil: 'networkidle0' });
+    await page.waitForSelector('#date-wise-wrap');
+
+    const matchesByDate = await page.evaluate(() => {
+        const dateContainers = document.querySelectorAll('#date-wise-wrap');
+        const result = [];
+
+        dateContainers.forEach(dateContainer => {
+            const dateElement = dateContainer.querySelector('.date div');
+            if (!dateElement) return;
+
+            const date = dateElement.textContent.trim();
+            const matchElements = dateContainer.querySelectorAll('.match-card-container');
+
+            const matches = Array.from(matchElements).map(element => {
+                const teams = element.querySelectorAll('.team-name');
+                const scores = element.querySelectorAll('.team-score');
+                const overs = element.querySelectorAll('.total-overs');
+                const result = element.querySelector('.result span');
+                const matchInfo = element.querySelector('.reason');
+                const startTime = element.querySelector('.not-started');
+                const logos = element.querySelectorAll("img");
+                return {
+                    team1: teams[0]?.textContent.trim(),
+                    team2: teams[1]?.textContent.trim(),
+                    score1: scores[0]?.textContent.trim(),
+                    score2: scores[1]?.textContent.trim(),
+                    logo1: logos[0]?.src || 'N/A',
+                    logo2: logos[1]?.src || 'N/A',
+                    overs1: overs[0]?.textContent.trim() || 'N/A',
+                    overs2: overs[1]?.textContent.trim() || 'N/A',
+                    result: result?.textContent.trim() || 'Upcoming',
+                    matchInfo: matchInfo?.textContent.trim() || startTime?.innerText.split("\n")[2] || 'N/A',
+                    startTime: startTime ? startTime.innerText.split("\n")[0] : 'N/A'
+                };
+            });
+
+            result.push({ date, matches });
+        });
+
+        return result;
+    });
+
+    await browser.close();
+    return matchesByDate;
+}
+app.get('/api/fixtures/match-list', async (req, res) => {
+    try {
+        // Check if data is in cache
+        const cachedData = cache.get('match-list');
+        if (cachedData) {
+            console.log('Serving from cache');
+            return res.json(cachedData);
+        }
+
+        // If not in cache, scrape the data
+        console.log('Scraping fresh data');
+        const matches = await scrapeCricketMatches();
+
+        // Store in cache
+        cache.set('matches', matches);
+
+        res.json(matches);
+    } catch (error) {
+        console.error('Error:', error);
+        res.status(500).json({ error: 'An error occurred while fetching the data' });
+    }
+});
+
 app.get('/api/series/:slug/:subSlug/:subroute', validateParams, async (req, res) => {
     try {
         const { slug, subSlug, subroute } = req.params;
@@ -1232,21 +1297,18 @@ app.get('/api/series/:slug/:subSlug/:subroute', validateParams, async (req, res)
 
 app.get('/api/rankings/:gen/:cat', async function (req, res) {
     const { gen, cat } = req.params;
-    let url;
+    let url = `${process.env.BASE}/rankings/${gen.toLowerCase()}/${cat.toLowerCase()}`;
     let scrapeFunction;
-
     switch (gen.toLowerCase()) {
         case 'men':
         case 'women':
             switch (cat.toLowerCase()) {
                 case 'teams':
-                    url = `${process.env.BASE}/rankings/${gen.toLowerCase()}/${cat.toLowerCase()}`;
                     scrapeFunction = scrapeCricketRankings;
                     break;
                 case 'batter':
                 case 'bowler':
                 case 'allrounder':
-                    url = `${process.env.BASE}/rankings/${gen.toLowerCase()}/${cat.toLowerCase()}`;
                     scrapeFunction = scrapeRankings;
 
                     break;
@@ -1336,54 +1398,176 @@ app.get('/api/matches', async (req, res) => {
     }
 });
 
-app.get('/api/news-blogs', async (req, res) => {
+// app.get('/api/news-blogs', async (req, res) => {
+//     try {
+//         const { page = 1, limit = 3 } = req.query;
+
+//         // Validate and convert parameters to numbers
+//         const pageNumber = parseInt(page, 10);
+//         const pageSize = parseInt(limit, 10);
+
+//         if (isNaN(pageNumber) || isNaN(pageSize) || pageNumber < 1 || pageSize < 1) {
+//             return res.status(400).json({ error: 'Invalid pagination parameters' });
+//         }
+
+//         if (!db) {
+//             db = await connectDB(); // Await the connection to ensure `db` is ready
+//             if (!db) {
+//                 throw new Error('Database connection failed');
+//             }
+//         }
+
+//         const collection = db.collection('news');
+
+//         // Calculate the skip and limit values
+//         const skip = (pageNumber - 1) * pageSize;
+//         const matches = await collection.find().skip(skip).limit(pageSize).toArray();
+//         const totalCount = await collection.countDocuments();
+
+//         res.json({
+//             totalPages: Math.ceil(totalCount / pageSize),
+//             currentPage: pageNumber,
+//             totalCount,
+//             matches
+//         });
+//     } catch (error) {
+//         console.error('Error:', error);
+//         res.status(500).json({ error: 'Failed to retrieve matches from the database' });
+//     }
+// });
+async function scrapeTableData(url, maxRetries = 3) {
+    let browser;
     try {
-        const { page = 1, limit = 3 } = req.query;
+        browser = await puppeteer.launch({ headless: 'new' });
+        const page = await browser.newPage();
+        page.setDefaultNavigationTimeout(60000);  // Increase timeout to 60 seconds
 
-        // Validate and convert parameters to numbers
-        const pageNumber = parseInt(page, 10);
-        const pageSize = parseInt(limit, 10);
+        for (let retry = 0; retry < maxRetries; retry++) {
+            try {
+                await page.goto(url, { waitUntil: 'networkidle0' });
+                await page.waitForSelector(".stats-header", { timeout: 10000 });
+                await page.waitForSelector('tbody tr', { timeout: 10000 });
 
-        if (isNaN(pageNumber) || isNaN(pageSize) || pageNumber < 1 || pageSize < 1) {
-            return res.status(400).json({ error: 'Invalid pagination parameters' });
-        }
+                // Scroll to load all data
+                await autoScroll(page);
 
-        if (!db) {
-            db = await connectDB(); // Await the connection to ensure `db` is ready
-            if (!db) {
-                throw new Error('Database connection failed');
+                const data = await page.evaluate(() => {
+                    const safeGetText = (element, selector) => {
+                        const el = element.querySelector(selector);
+                        return el ? el.textContent.trim() : '';
+                    };
+
+                    const safeGetAttribute = (element, selector, attribute) => {
+                        const el = element.querySelector(selector);
+                        return el ? el.getAttribute(attribute) : null;
+                    };
+
+                    // Table data scraping
+                    const tableData = (() => {
+                        const rows = document.querySelectorAll('tbody tr');
+                        return Array.from(rows, row => {
+                            const cells = row.querySelectorAll('td');
+                            if (cells.length === 0) return null;
+
+                            return {
+                                rank: safeGetText(row, 'td:first-child'),
+                                player: {
+                                    name: safeGetText(row, '.p-name'),
+                                    image: safeGetAttribute(row, '.player-img img', 'src')
+                                },
+                                team: {
+                                    name: safeGetText(row, '.team'),
+                                    image: safeGetAttribute(row, '.team-flag img', 'src')
+                                },
+                                strikeRate: safeGetText(row, 'td:nth-child(4)'),
+                                matches: safeGetText(row, 'td:nth-child(5)'),
+                                innings: safeGetText(row, 'td:nth-child(6)'),
+                                highestScore: safeGetText(row, 'td:nth-child(7)'),
+                                average: safeGetText(row, 'td:nth-child(8)'),
+                                runs: safeGetText(row, 'td:nth-child(9)'),
+                                hundreds: safeGetText(row, 'td:nth-child(10)'),
+                                fifties: safeGetText(row, 'td:nth-child(11)'),
+                                fours: safeGetText(row, 'td:nth-child(12)'),
+                                sixes: safeGetText(row, 'td:nth-child(13)')
+                            };
+                        }).filter(Boolean);
+                    })();
+
+                    // Stats corner data scraping
+                    const statsCornerData = (() => {
+                        const statsHeader = document.querySelector('.stats-header');
+                        if (!statsHeader) return null;
+
+                        const title = safeGetText(statsHeader, '.heading-wrapper h1 span');
+
+                        const players = Array.from(statsHeader.querySelectorAll('.player-img')).map(playerDiv => ({
+                            name: safeGetText(playerDiv, 'p'),
+                            score: safeGetText(playerDiv, '.score'),
+                            image: safeGetAttribute(playerDiv, 'img', 'src')
+                        }));
+
+                        return { title, players };
+                    })();
+
+                    return { tableData, statsCornerData };
+                });
+
+                return data;
+            } catch (error) {
+                console.error(`Attempt ${retry + 1} failed:`, error);
+                if (retry === maxRetries - 1) throw error;
+                await new Promise(resolve => setTimeout(resolve, 5000));  // Wait 5 seconds before retrying
             }
         }
-
-        const collection = db.collection('news');
-
-        // Calculate the skip and limit values
-        const skip = (pageNumber - 1) * pageSize;
-        const matches = await collection.find().skip(skip).limit(pageSize).toArray();
-        const totalCount = await collection.countDocuments();
-
-        res.json({
-            totalPages: Math.ceil(totalCount / pageSize),
-            currentPage: pageNumber,
-            totalCount,
-            matches
-        });
     } catch (error) {
-        console.error('Error:', error);
-        res.status(500).json({ error: 'Failed to retrieve matches from the database' });
+        console.error('Scraping failed after max retries:', error);
+        throw error;
+    } finally {
+        if (browser) await browser.close();
     }
-});
+}
 
+async function autoScroll(page) {
+    await page.evaluate(async () => {
+        await new Promise((resolve) => {
+            let totalHeight = 0;
+            const distance = 100;
+            const timer = setInterval(() => {
+                const scrollHeight = document.body.scrollHeight;
+                window.scrollBy(0, distance);
+                totalHeight += distance;
+
+                if (totalHeight >= scrollHeight) {
+                    clearInterval(timer);
+                    resolve();
+                }
+            }, 100);
+        });
+    });
+}
 app.get('/api/stats-corner', async function (req, res) {
     try {
-        const data = await scrapeStatsCorner(process.env.BASE);
+        const urlList = [
+            "https://crex.live/stats/most-fifties-in-ipl-2024?m=2&sid=5&sn=1IR&vn=-1&tm=-1&fmt=2&isT=0&yr=2024",
+            "https://crex.live/stats/most-sixes-in-ipl-2024?m=3&sid=5&sn=1IR&vn=-1&tm=-1&fmt=2&isT=0&yr=2024",
+            "https://crex.live/stats/most-fours-in-ipl-2024?m=4&sid=5&sn=1IR&vn=-1&tm=-1&fmt=2&isT=0&yr=2024",
+            "https://crex.live/stats/ipl-2024-orange-cap-list?m=0&sid=5&sn=1IR&vn=-1&tm=-1&fmt=2&isT=0&yr=2024",
+            "https://crex.live/stats/most-runs-in-t20-wc-2024?m=0&sid=1&sn=1H5&vn=-1&tm=-1&fmt=2&isT=1&yr=2024",
+            "https://crex.live/stats/most-wickets-in-t20-wc-2024?m=1&sid=1&sn=1H5&vn=-1&tm=-1&fmt=2&isT=1&yr=2024",
+            "https://crex.live/stats/most-fours-in-t20-wc-2024?m=0&sid=1&sn=1H5&vn=-1&tm=-1&fmt=2&isT=1&yr=2024",
+            "https://crex.live/stats/highest-strike-rate-in-t20-wc-2024?m=5&sid=1&sn=1H5&vn=-1&tm=-1&fmt=2&isT=1&yr=2024",
+            "https://crex.live/stats/most-fifties-in-t20-wc-2024?m=2&sid=1&sn=1H5&vn=-1&tm=-1&fmt=2&isT=1&yr=2024",
+            "https://crex.live/stats/most-sixes-in-t20-wc-2024?m=3&sid=1&sn=1H5&vn=-1&tm=-1&fmt=2&isT=1&yr=2024",
+        ];
+
+        const randomUrl = urlList[Math.floor(Math.random() * urlList.length)];
+        const data = await scrapeTableData(randomUrl);
         res.json(data);
     } catch (error) {
         console.error('Error:', error);
-        res.status(500).json({ error: 'Failed to retrieve stats corner data' });
+        res.status(500).json({ error: 'Failed to retrieve stats corner data', details: error.message });
     }
-})
-
+});
 
 app.get('/api/get-suffle-list', async function (req, res) {
     const baseUrl = 'https://crex.live/stats/most-runs-in-asia-cup-2022?m=0&sid=1&sn=11J&vn=6U&tm=T&fmt=2&isT=6&yr=2022';
@@ -1455,7 +1639,7 @@ app.get('/api/series-list', async (req, res) => {
             // Extract data from the current page
             const seriesData = await page.evaluate(() => {
                 const series = [];
-                document.querySelectorAll('.series-card').forEach(card => { 
+                document.querySelectorAll('.series-card').forEach(card => {
                     series.push({
                         name: card.querySelector('.series-name').textContent,
                         date: card.querySelector('.series-desc span').textContent,
