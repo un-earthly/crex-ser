@@ -252,7 +252,7 @@ async function matchesScrapper(url) {
                     return {
                         name,
                         score: score,
-                        overs: overs
+                        overs: overs,
                     };
                 };
 
@@ -289,7 +289,9 @@ async function matchesScrapper(url) {
                     result,
                     upcomingTime,
                     matchDate,
-                    startTime
+                    startTime,
+                    link: card.querySelector('a')?.href.replace('https://crex.live', '') || null
+
                 };
             });
         });
@@ -516,7 +518,8 @@ async function seriesScrapper(url) {
                 const matchData = {
                     teams: Array.from(match.querySelectorAll('.team-name')).map(team => team.textContent.trim()),
                     scores: Array.from(match.querySelectorAll('.team-score')).map(score => score.textContent.trim()),
-                    result: match.querySelector('.result')?.textContent.trim()
+                    result: match.querySelector('.result')?.textContent.trim(),
+                    link: match?.href?.replace('https://crex.live', '')
                 };
 
                 // Check if the match hasn't started yet
@@ -990,56 +993,502 @@ async function scrapTeamList(url) {
 }
 
 
-// API function to scrape and save team data
-async function scrapeAndSaveTeams(url) {
-    const browser = await puppeteer.launch({
-        headless: "new",
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
-    });
+async function scrapeMatchInfoDetails(url) {
+    const browser = await puppeteer.launch({ headless: "new" });
     const page = await browser.newPage();
 
     try {
-        await page.goto(url, { waitUntil: 'networkidle0' });
+        await page.goto(url, { waitUntil: 'networkidle2' });
+        await page.waitForSelector(".info-container", { visible: true });
+        await page.waitForSelector(".live-score-card", { visible: true });
+        await page.waitForSelector(".content-wrap", { visible: true })
+        await page.waitForSelector(".team-header-card", { visible: true });
+        await page.waitForSelector(".table-responsive", { visible: true });
+        await page.waitForSelector(".global-card-wrap", { visible: true });
+        const matchDetails = await page.evaluate(() => {
+            const getTeamData = (teamSelector) => {
+                const teamElement = document.querySelector(teamSelector);
+                if (!teamElement) return null;
+                return {
+                    name: teamElement.querySelector('.team-name')?.textContent.trim() || '',
+                    score: teamElement.querySelector('.runs span:first-child')?.textContent.trim() || '',
+                    overs: teamElement.querySelector('.runs span:last-child')?.textContent.trim() || '',
+                    imageUrl: teamElement.querySelector('img')?.src || ''
+                };
+            };
 
-        const teamData = await page.evaluate(() => {
-            const teams = [];
-            const teamElements = document.querySelectorAll('.team-div');
+            const team1 = getTeamData('.team-inning:first-child');
+            const team2 = getTeamData('.team-inning.second-inning');
+            const result = document.querySelector('.result-box span')?.textContent.trim() || '';
+            const matchName = document.querySelector('.name-wrapper span')?.textContent.trim() || '';
+            const contentWrap = document.querySelector('.content-wrap.s-wrap');
+            let seriesInfo = null;
+            if (contentWrap) {
+                const seriesLink = contentWrap.getAttribute('href')?.replace(/^\//, '') || '';
+                const seriesName = contentWrap.querySelector('.s-name')?.textContent.trim().split('').slice(0, -1).join('').trim() || '';
+                seriesInfo = {
+                    matchFormat: contentWrap.querySelector('.s-format')?.textContent.trim() || '',
+                    seriesName: seriesName,
+                    seriesImageUrl: contentWrap.querySelector('.s-img')?.src || '',
+                    seriesLink: seriesLink
 
-            teamElements.forEach((teamElement) => {
-                const teamName = teamElement.querySelector('.team-name').textContent.trim();
-                const flagUrl = teamElement.querySelector('.team-flag').src;
+                };
+            }
+            const getTeamForm = (teamSelector, matchSelector) => {
+                const teamElements = document.querySelectorAll(teamSelector);
+                if (!teamElements) return null;
 
-                teams.push({
-                    name: teamName,
-                    flagUrl: flagUrl
+                return Array.from(teamElements).map(teamElement => {
+                    const formMatches = Array.from(teamElement.parentNode.querySelectorAll(matchSelector)).map(match => {
+                        const result = match.classList.contains('win') ? 'W' : 'L';
+                        const isLastMatch = match.classList.contains('loss-match-star');
+                        return { result, isLastMatch };
+                    });
+
+                    return {
+                        name: teamElement.querySelector('.form-team-name')?.textContent.trim() || '',
+                        imageUrl: teamElement.querySelector('.form-team-img')?.src || '',
+                        form: formMatches
+                    };
                 });
-            });
+            };
 
-            return teams;
+
+            const team1Form = getTeamForm('.form-match-team', ".match");
+
+            const otherMatches = Array.from(document.querySelectorAll('.format-card-wrap')).map(card => {
+                return {
+                    team1: {
+                        name: card.querySelector('.form-team-detail:first-child .team-name')?.textContent.trim() || '',
+                        score: card.querySelector('.form-team-detail:first-child .team-score')?.textContent.trim() || '',
+                        overs: card.querySelector('.form-team-detail:first-child .team-over')?.textContent.trim() || '',
+                        imageUrl: card.querySelector('.form-team-detail:first-child img')?.src || ''
+                    },
+                    team2: {
+                        name: card.querySelector('.form-team-detail:last-child .team-name')?.textContent.trim() || '',
+                        score: card.querySelector('.form-team-detail:last-child .team-score')?.textContent.trim() || '',
+                        overs: card.querySelector('.form-team-detail:last-child .team-over')?.textContent.trim() || '',
+                        imageUrl: card.querySelector('.form-team-detail:last-child img')?.src || ''
+                    },
+                    matchName: card.querySelector('.match-name')?.textContent.trim() || '',
+                    seriesName: card.querySelector('.series-name')?.textContent.trim() || '',
+                    result: card.querySelector('.win.match span')?.textContent.trim() || card.querySelector('.loss.match span')?.textContent.trim() || ''
+                };
+            });
+            const siblingMatchData = {
+                team1: {
+                    name: document.querySelector('.team1 .team-name')?.textContent.trim() || '',
+                    imageUrl: document.querySelector('.team1 .team-logo img')?.src || ''
+                },
+                team2: {
+                    name: document.querySelector('.team2 .team-name')?.textContent.trim() || '',
+                    imageUrl: document.querySelector('.team2 .team-logo img')?.src || ''
+                },
+            };
+
+
+            return {
+                matchName,
+                team1,
+                team2,
+                result,
+                seriesInfo,
+                teamForm: {
+                    ...team1Form
+                },
+                otherMatches,
+                siblingMatchData
+            };
         });
 
-        await browser.close();
+        const tabsData = [];
+        const tabs = await page.$$('.team-comp-type');
+        for (let i = 0; i < tabs.length; i++) {
+            await tabs[i].click();
 
-        if (!db) {
-            db = await connectDB();
-            if (!db) {
-                throw new Error('Database connection failed');
-            }
+            const tabContent = await page.evaluate(() => {
+                const stats = Array.from(document.querySelectorAll('.table-responsive tbody tr')).map(row => {
+                    const [team1Stat, description, team2Stat] = row.querySelectorAll('td');
+                    return {
+                        team1Stat: team1Stat?.textContent.trim() || '',
+                        description: description?.textContent.trim() || '',
+                        team2Stat: team2Stat?.textContent.trim() || ''
+                    };
+                });
+                return stats;
+            });
+
+            const tabName = await page.evaluate((tab) => tab.textContent.trim(), tabs[i]);
+            tabsData.push({
+                tabName,
+                stats: tabContent
+            });
         }
 
-        const teamsCollection = db.collection("teams");
+        matchDetails.tabsData = tabsData;
+        const venueDetails = await page.evaluate(() => {
+            const venueElement = document.querySelector('#venue-details');
+            const venueName = venueElement.querySelector('.title-text')?.innerText || '';
+            const weatherCondition = venueElement.querySelector('.weather-cloudy-text-mweb')?.innerText || '';
+            const temperature = venueElement.querySelector('.weather-temp')?.innerText || '';
+            const humidity = venueElement.querySelector('.humidity-text')?.innerText || '';
+            const chanceOfRain = venueElement.querySelector(`.humidity-text+div>img+div`)?.innerText || '';
 
-        // Insert the scraped data into MongoDB
-        const result = await teamsCollection.insertMany(teamData);
-        console.log(`${result.insertedCount} teams were inserted into the database`);
+            // Venue stats
+            const matchesPlayed = venueElement.querySelector('.match-count')?.innerText || '';
+            const winBatFirst = venueElement.querySelector('.win-bat-first .match-win-per')?.innerText || '';
+            const winBowlFirst = venueElement.querySelector('.match-win-per.low-score-color')?.innerText || '';
+            const avgFirstInnings = venueElement.querySelector('.venue-avg-wrap .venue-avg-val')?.innerText || '';
+            const avgSecondInnings = venueElement.querySelector('.venue-avg-sec-inn .venue-avg-val')?.innerText || '';
+            const highstats = Array.from(venueElement.querySelectorAll('.venue-score')).map(el => el.innerText)
+            const paceVSspinStats = Array.from(venueElement.querySelectorAll('.wicket-count')).map(el => el.innerText)
+            const paceVSspinStatsPercentage = Array.from(venueElement.querySelectorAll('.s-format')).map(el => el.innerText)
+            const recentMatchesOnVenue = Array.from(venueElement.querySelectorAll('.global-card-wrap')).map(card => {
+                const team1Name = card.querySelector('.global-match-team-detail .team-name')?.innerText.trim() || '';
+                const team1Score = card.querySelector('.global-match-team-detail .team-score')?.innerText.trim() || '';
+                const team1Overs = card.querySelector('.global-match-team-detail .team-over')?.innerText.trim() || '';
+                const team1Img = card.querySelector('.global-match-team img')?.src || '';
 
-        return { message: `${result.insertedCount} teams were successfully scraped and saved.` };
+                const team2Name = card.querySelector('.global-match-end .team-name')?.innerText.trim() || '';
+                const team2Score = card.querySelector('.global-match-end .team-score')?.innerText.trim() || '';
+                const team2Overs = card.querySelector('.global-match-end .team-over')?.innerText.trim() || '';
+                const team2Img = card.querySelector('.global-match-end img')?.src || '';
 
+                const matchResult = card.querySelector('.match-dec-text')?.innerText.trim() || '';
+                const seriesName = card.querySelector('.series-name')?.innerText.trim() || '';
+                const matchLink = card.querySelector('.global-match-card')?.href || '';
+
+                return {
+                    team1: {
+                        name: team1Name,
+                        score: team1Score,
+                        overs: team1Overs,
+                        imageUrl: team1Img
+                    },
+                    team2: {
+                        name: team2Name,
+                        score: team2Score,
+                        overs: team2Overs,
+                        imageUrl: team2Img
+                    },
+                    result: matchResult,
+                    seriesName,
+                    matchLink
+                };
+            })
+
+
+            return {
+                venueName,
+                weather: {
+                    condition: weatherCondition,
+                    temperature,
+                    humidity,
+                    chanceOfRain,
+                },
+                stats: {
+                    matchesPlayed,
+                    winBatFirst,
+                    winBowlFirst,
+                    avgFirstInnings,
+                    avgSecondInnings,
+                    highestTotal: highstats[0],
+                    lowestTotal: highstats[1],
+                    highestChased: highstats[2],
+                },
+                paceVSspin: {
+                    paceWickets: paceVSspinStats[0],
+                    spinWickets: paceVSspinStats[1],
+                    paceWicketsPercentage: paceVSspinStatsPercentage[0],
+                    spinWicketsPercentage: paceVSspinStatsPercentage[1],
+                },
+                recentMatchesOnVenue,
+            };
+        });
+        const umpireData = await page.evaluate(() => {
+            // Create an object to hold the data
+            let data = {};
+
+            // Scrape On-field Umpire
+            const onFieldUmpireKey = document.querySelector('h2.umpire-key')?.innerText.trim();
+            const onFieldUmpireVal = document.querySelector('div.umpire-val')?.innerText.trim();
+            if (onFieldUmpireKey && onFieldUmpireVal) {
+                data[onFieldUmpireKey] = onFieldUmpireVal;
+            }
+
+            // Scrape Third Umpire
+            const thirdUmpireKey = document.querySelectorAll('h2.umpire-key')[1]?.innerText.trim();
+            const thirdUmpireVal = document.querySelectorAll('div.umpire-val')[1]?.innerText.trim();
+            if (thirdUmpireKey && thirdUmpireVal) {
+                data[thirdUmpireKey] = thirdUmpireVal;
+            }
+
+            // Scrape Referee
+            const refereeKey = document.querySelectorAll('h2.umpire-key')[2]?.innerText.trim();
+            const refereeVal = document.querySelectorAll('div.umpire-val')[2]?.innerText.trim();
+            if (refereeKey && refereeVal) {
+                data[refereeKey] = refereeVal;
+            }
+
+            return data;
+        });
+        const playerData = await page.evaluate(async () => {
+            document.querySelector('.bench-toggle').click()
+            const getPlayerData = (selector) => {
+                const players = [];
+                document.querySelectorAll(selector).forEach(playerElement => {
+                    const playerUrl = playerElement.querySelector('a')?.href;
+                    const playerName = playerElement.querySelector('.p-name')?.textContent.trim();
+                    const playerRole = playerElement.querySelector('.p-name+div')?.textContent.trim();
+                    const playerTitle = playerElement.querySelector('.bat-ball-type div')?.textContent.trim();
+                    const playerImage = playerElement.querySelector('img')?.src;
+                    let imageUrl = playerImage;
+                    if (imageUrl.includes('playerPlaceholder.svg')) {
+                        imageUrl = 'Image not available';
+                    }
+
+                    players.push({
+                        profile: playerUrl,
+                        name: playerName,
+                        image: imageUrl,
+                        role: playerRole,
+                        title: playerTitle,
+                    });
+                });
+                return players;
+            };
+            const toss = {
+                icon: document.querySelector(".toss-wrap img")?.src,
+                text: document.querySelector(".toss-wrap p")?.textContent
+            }
+            const teamsData = {};
+
+            const teamButtons = document.querySelectorAll('.playingxi-button');
+
+            for (let i = 0; i < teamButtons.length; i++) {
+                // Click on the team tab
+                teamButtons[i].click();
+                await new Promise(r => setTimeout(r, 500)); // Wait for the DOM to update
+
+                const teamName = teamButtons[i].textContent.trim();
+
+                teamsData[teamName] = getPlayerData('.playingxi-card-row');
+
+            }
+
+            return { teamsData, toss };
+        });
+
+
+        matchDetails.venueDetails = venueDetails;
+        matchDetails.playerData = playerData
+        matchDetails.umpireData = umpireData;
+        return matchDetails;
     } catch (error) {
-        console.error('Error during scraping or database operation:', error);
-        throw error;
+        console.error('An error occurred while scraping:', error);
+        return null;
+    } finally {
+        await browser.close();
     }
 }
+async function scrapeScorecardInfo(url) {
+    console.log(url)
+    return {}
+}
+
+
+async function scrapeLiveMatchInfo(url) {
+    console.log(url);
+    const browser = await puppeteer.launch({ headless: false });
+    const page = await browser.newPage();
+
+    try {
+        // Navigate to the webpage
+        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+
+        const loadAllContent = async () => {
+            while (true) {
+                let lastHeight = await page.evaluate('document.body.scrollHeight');
+                await page.evaluate('window.scrollTo(0, document.body.scrollHeight)');
+                await page.waitForFunction(`document.body.scrollHeight > ${lastHeight}`);
+                await new Promise(resolve => setTimeout(resolve, 500));
+
+            }
+        };
+
+        await loadAllContent();
+
+        // Wait for required elements to load
+        await page.waitForSelector('.player-card-wrapper', { timeout: 10000 });
+        await page.waitForSelector('.overs-slide', { timeout: 10000 });
+
+        // Scrape player data
+        const playersData = await page.evaluate(() => {
+            const playerCards = document.querySelectorAll('.batsmen-partnership');
+            return Array.from(playerCards).map(card => {
+                return {
+                    name: card.querySelector('.batsmen-name')?.textContent.trim() || null,
+                    img: card.querySelector('img')?.src || null,
+                    link: card.querySelector('a')?.href.replace("https://crex.live", "") || null,
+                    score: {
+                        runs: card.querySelectorAll('.batsmen-score p')[0]?.innerText || null,
+                        ball: card.querySelectorAll('.batsmen-score p')[1]?.innerText || null,
+                    },
+                    strikeRate: Array.from(card.querySelectorAll('.strike-rate')).map(srCard => {
+                        const spans = srCard.querySelectorAll('span');
+                        return {
+                            [spans[0]?.textContent.trim()]: spans[1]?.textContent.trim()
+                        };
+                    })
+                };
+            });
+        });
+
+        // Scrape overs data
+        const oversData = await page.evaluate(() => {
+            const slides = document.querySelectorAll(".overs-slide");
+            return Array.from(slides).map(slide => {
+                return {
+                    thisOver: slide.querySelector("span")?.textContent.trim() || '',
+                    overData: Array.from(slide.querySelectorAll(".over-ball")).map(ball => ball.textContent.trim())
+                };
+            });
+        });
+
+        // Scrape probability data
+        const probability = await page.evaluate(() => {
+            const teamNames = Array.from(document.querySelectorAll('.odds-session-left .teamNameScreenText'))
+                .map(el => el.textContent.trim());
+            const percentages = Array.from(document.querySelectorAll('.odds-session-left .percentageScreenText'))
+                .map(el => el.textContent.trim());
+            const progressBarWidth = document.querySelector('#favTeamProgress')?.style.width || '0%';
+            return { teams: teamNames, percentages, progressBarWidth };
+        });
+
+        // Scrape projected score
+        const projectedScore = await page.evaluate(() => {
+            const headers = document.querySelectorAll('.projected-score .p-score thead th span.rr-text.rr-data');
+            const rows = document.querySelectorAll('.projected-score .p-score tbody tr');
+
+            return {
+                headers: Array.from(headers).map(header => header.textContent.trim()),
+                rows: Array.from(rows).map(row => {
+                    const cols = row.querySelectorAll('td span.over-data');
+                    return Array.from(cols).map(col => col.textContent.trim());
+                })
+            };
+        });
+
+        // Scrape commentary
+        const commentary = await page.evaluate(() => {
+            const roundcards = document.querySelectorAll('.cm-b-roundcard');
+            return Array.from(roundcards).map(card => {
+                return {
+                    over: card.querySelector('.cm-b-over')?.textContent.trim() || '',
+                    ballUpdate: card.querySelector('.cm-b-ballupdate')?.textContent.trim() || '',
+                    commentaryText: card.querySelector('.cm-b-comment-c1')?.textContent.trim() || '',
+                    description: card.querySelector('.cm-b-comment-c2')?.textContent.trim() || ''
+                };
+            });
+        });
+
+        // Scrape inning-wise session PR
+        const inningWiseSessionPR = await page.evaluate(() => {
+            const sessions = document.querySelectorAll('app-match-inning-wise-session');
+            return Array.from(sessions).map(session => {
+                const teamInfos = Array.from(session.querySelectorAll('.ssn-data')).map(dataItem => {
+                    const sessionDetails = [];
+                    const tableElement = dataItem.closest('.ssn-score').querySelector('.p-score');
+
+                    if (tableElement) {
+                        Array.from(tableElement.querySelectorAll('tbody tr')).forEach(row => {
+                            const cells = row.querySelectorAll('td');
+                            if (cells.length === 3) {
+                                sessionDetails.push({
+                                    session: cells[0]?.innerText.trim(),
+                                    open: cells[1]?.innerText.trim(),
+                                    pass: cells[2]?.innerText.trim()
+                                });
+                            }
+                        });
+                    } else {
+                        console.warn(`Table not found for team: ${dataItem.innerText.trim()}`);
+                    }
+
+                    return {
+                        teamName: dataItem.querySelector(".ps-text")?.innerText.trim() || null,
+                        sessionDetails
+                    };
+                });
+
+                return teamInfos;
+            });
+        });
+
+        return {
+            playersData,
+            oversData,
+            projectedScore,
+            probability,
+            inningWiseSessionPR,
+            commentary
+        };
+    } catch (error) {
+        console.error('Error scraping live match info:', error);
+    } finally {
+        await browser.close();
+    }
+}
+// API function to scrape and save team data
+// async function scrapeAndSaveTeams(url) {
+//     const browser = await puppeteer.launch({
+//         headless: "new",
+//         args: ['--no-sandbox', '--disable-setuid-sandbox']
+//     });
+//     const page = await browser.newPage();
+
+//     try {
+//         await page.goto(url, { waitUntil: 'networkidle0' });
+
+//         const teamData = await page.evaluate(() => {
+//             const teams = [];
+//             const teamElements = document.querySelectorAll('.team-div');
+
+//             teamElements.forEach((teamElement) => {
+//                 const teamName = teamElement.querySelector('.team-name').textContent.trim();
+//                 const flagUrl = teamElement.querySelector('.team-flag').src;
+
+//                 teams.push({
+//                     name: teamName,
+//                     flagUrl: flagUrl
+//                 });
+//             });
+
+//             return teams;
+//         });
+
+//         await browser.close();
+
+//         if (!db) {
+//             db = await connectDB();
+//             if (!db) {
+//                 throw new Error('Database connection failed');
+//             }
+//         }
+
+//         const teamsCollection = db.collection("teams");
+
+//         // Insert the scraped data into MongoDB
+//         const result = await teamsCollection.insertMany(teamData);
+//         console.log(`${result.insertedCount} teams were inserted into the database`);
+
+//         return { message: `${result.insertedCount} teams were successfully scraped and saved.` };
+
+//     } catch (error) {
+//         console.error('Error during scraping or database operation:', error);
+//         throw error;
+//     }
+// }
 
 async function getTeams(page = 1, pageSize = 10, searchTerm = '') {
     try {
@@ -1116,17 +1565,6 @@ async function scrapeAndSaveSeries(url) {
 
         await browser.close();
 
-        // const db = await connectDB();
-        // if (!db) {
-        //     throw new Error('Database connection failed');
-        // }
-
-        // const seriesCollection = db.collection("series");
-
-        // Insert the scraped data into MongoDB
-        // const result = await seriesCollection.insertMany(seriesData);
-
-        // console.log(`${result.insertedCount} series were inserted into the database`);
 
         return {
             seriesData,
@@ -1138,28 +1576,116 @@ async function scrapeAndSaveSeries(url) {
         throw error;
     }
 }
-
-app.get('/api/scrape-series-list', async (req, res) => {
+async function scrapeTableData(url, maxRetries = 3) {
+    let browser;
     try {
-        const data = await scrapeAndSaveSeries(process.env.BASE + '/fixtures/series-list')
-        res.json(data);
-    } catch (error) {
-        console.error('Error scraping navbar data:', error);
-        res.status(500).json({ error: 'Failed to scrape navbar data' });
-    }
-});
+        browser = await puppeteer.launch({ headless: 'new' });
+        const page = await browser.newPage();
+        page.setDefaultNavigationTimeout(60000);  // Increase timeout to 60 seconds
 
-app.get('/api/series/:slug/:subSlug', async (req, res) => {
-    try {
-        const { slug, subSlug } = req.params;
-        const data = await seriesScrapper(process.env.BASE + '/series/' + slug + "/" + subSlug)
+        for (let retry = 0; retry < maxRetries; retry++) {
+            try {
+                await page.goto(url, { waitUntil: 'networkidle0' });
+                await page.waitForSelector(".stats-header", { timeout: 10000 });
+                await page.waitForSelector('tbody tr', { timeout: 10000 });
 
-        res.json({ data });
+                // Scroll to load all data
+                await autoScroll(page);
+
+                const data = await page.evaluate(() => {
+                    const safeGetText = (element, selector) => {
+                        const el = element.querySelector(selector);
+                        return el ? el.textContent.trim() : '';
+                    };
+
+                    const safeGetAttribute = (element, selector, attribute) => {
+                        const el = element.querySelector(selector);
+                        return el ? el.getAttribute(attribute) : null;
+                    };
+
+                    // Table data scraping
+                    const tableData = (() => {
+                        const rows = document.querySelectorAll('tbody tr');
+                        return Array.from(rows, row => {
+                            const cells = row.querySelectorAll('td');
+                            if (cells.length === 0) return null;
+
+                            return {
+                                rank: safeGetText(row, 'td:first-child'),
+                                player: {
+                                    name: safeGetText(row, '.p-name'),
+                                    image: safeGetAttribute(row, '.player-img img', 'src')
+                                },
+                                team: {
+                                    name: safeGetText(row, '.team'),
+                                    image: safeGetAttribute(row, '.team-flag img', 'src')
+                                },
+                                strikeRate: safeGetText(row, 'td:nth-child(4)'),
+                                matches: safeGetText(row, 'td:nth-child(5)'),
+                                innings: safeGetText(row, 'td:nth-child(6)'),
+                                highestScore: safeGetText(row, 'td:nth-child(7)'),
+                                average: safeGetText(row, 'td:nth-child(8)'),
+                                runs: safeGetText(row, 'td:nth-child(9)'),
+                                hundreds: safeGetText(row, 'td:nth-child(10)'),
+                                fifties: safeGetText(row, 'td:nth-child(11)'),
+                                fours: safeGetText(row, 'td:nth-child(12)'),
+                                sixes: safeGetText(row, 'td:nth-child(13)')
+                            };
+                        }).filter(Boolean);
+                    })();
+
+                    // Stats corner data scraping
+                    const statsCornerData = (() => {
+                        const statsHeader = document.querySelector('.stats-header');
+                        if (!statsHeader) return null;
+
+                        const title = safeGetText(statsHeader, '.heading-wrapper h1 span');
+
+                        const players = Array.from(statsHeader.querySelectorAll('.player-img')).map(playerDiv => ({
+                            name: safeGetText(playerDiv, 'p'),
+                            score: safeGetText(playerDiv, '.score'),
+                            image: safeGetAttribute(playerDiv, 'img', 'src')
+                        }));
+
+                        return { title, players };
+                    })();
+
+                    return { tableData, statsCornerData };
+                });
+
+                return data;
+            } catch (error) {
+                console.error(`Attempt ${retry + 1} failed:`, error);
+                if (retry === maxRetries - 1) throw error;
+                await new Promise(resolve => setTimeout(resolve, 5000));  // Wait 5 seconds before retrying
+            }
+        }
     } catch (error) {
-        console.error('Error:', error);
-        res.status(500).json({ error: 'Failed to retrieve series ' });
+        console.error('Scraping failed after max retries:', error);
+        throw error;
+    } finally {
+        if (browser) await browser.close();
     }
-})
+}
+
+async function autoScroll(page) {
+    await page.evaluate(async () => {
+        await new Promise((resolve) => {
+            let totalHeight = 0;
+            const distance = 100;
+            const timer = setInterval(() => {
+                const scrollHeight = document.body.scrollHeight;
+                window.scrollBy(0, distance);
+                totalHeight += distance;
+
+                if (totalHeight >= scrollHeight) {
+                    clearInterval(timer);
+                    resolve();
+                }
+            }, 100);
+        });
+    });
+}
 
 
 // Middleware for input validation
@@ -1193,6 +1719,7 @@ async function scrapeCricketMatches() {
             const matchElements = dateContainer.querySelectorAll('.match-card-container');
 
             const matches = Array.from(matchElements).map(element => {
+                const link = element.querySelector('a').href.replace('https://crex.live', '');
                 const teams = element.querySelectorAll('.team-name');
                 const scores = element.querySelectorAll('.team-score');
                 const overs = element.querySelectorAll('.total-overs');
@@ -1201,17 +1728,18 @@ async function scrapeCricketMatches() {
                 const startTime = element.querySelector('.not-started');
                 const logos = element.querySelectorAll("img");
                 return {
+                    link,
                     team1: teams[0]?.textContent.trim(),
                     team2: teams[1]?.textContent.trim(),
                     score1: scores[0]?.textContent.trim(),
                     score2: scores[1]?.textContent.trim(),
-                    logo1: logos[0]?.src || 'N/A',
-                    logo2: logos[1]?.src || 'N/A',
-                    overs1: overs[0]?.textContent.trim() || 'N/A',
-                    overs2: overs[1]?.textContent.trim() || 'N/A',
+                    logo1: logos[0]?.src,
+                    logo2: logos[1]?.src,
+                    overs1: overs[0]?.textContent.trim(),
+                    overs2: overs[1]?.textContent.trim(),
                     result: result?.textContent.trim() || 'Upcoming',
-                    matchInfo: matchInfo?.textContent.trim() || startTime?.innerText.split("\n")[2] || 'N/A',
-                    startTime: startTime ? startTime.innerText.split("\n")[0] : 'N/A'
+                    matchInfo: matchInfo?.textContent.trim() || startTime?.innerText.split("\n")[2],
+                    startTime: startTime && startTime.innerText.split("\n")[0]
                 };
             });
 
@@ -1397,154 +1925,85 @@ app.get('/api/matches', async (req, res) => {
         res.status(500).json({ error: 'Failed to scrape the data' });
     }
 });
-
-// app.get('/api/news-blogs', async (req, res) => {
-//     try {
-//         const { page = 1, limit = 3 } = req.query;
-
-//         // Validate and convert parameters to numbers
-//         const pageNumber = parseInt(page, 10);
-//         const pageSize = parseInt(limit, 10);
-
-//         if (isNaN(pageNumber) || isNaN(pageSize) || pageNumber < 1 || pageSize < 1) {
-//             return res.status(400).json({ error: 'Invalid pagination parameters' });
-//         }
-
-//         if (!db) {
-//             db = await connectDB(); // Await the connection to ensure `db` is ready
-//             if (!db) {
-//                 throw new Error('Database connection failed');
-//             }
-//         }
-
-//         const collection = db.collection('news');
-
-//         // Calculate the skip and limit values
-//         const skip = (pageNumber - 1) * pageSize;
-//         const matches = await collection.find().skip(skip).limit(pageSize).toArray();
-//         const totalCount = await collection.countDocuments();
-
-//         res.json({
-//             totalPages: Math.ceil(totalCount / pageSize),
-//             currentPage: pageNumber,
-//             totalCount,
-//             matches
-//         });
-//     } catch (error) {
-//         console.error('Error:', error);
-//         res.status(500).json({ error: 'Failed to retrieve matches from the database' });
-//     }
-// });
-async function scrapeTableData(url, maxRetries = 3) {
-    let browser;
+app.get('/api/scrape-series-list', async (req, res) => {
     try {
-        browser = await puppeteer.launch({ headless: 'new' });
-        const page = await browser.newPage();
-        page.setDefaultNavigationTimeout(60000);  // Increase timeout to 60 seconds
-
-        for (let retry = 0; retry < maxRetries; retry++) {
-            try {
-                await page.goto(url, { waitUntil: 'networkidle0' });
-                await page.waitForSelector(".stats-header", { timeout: 10000 });
-                await page.waitForSelector('tbody tr', { timeout: 10000 });
-
-                // Scroll to load all data
-                await autoScroll(page);
-
-                const data = await page.evaluate(() => {
-                    const safeGetText = (element, selector) => {
-                        const el = element.querySelector(selector);
-                        return el ? el.textContent.trim() : '';
-                    };
-
-                    const safeGetAttribute = (element, selector, attribute) => {
-                        const el = element.querySelector(selector);
-                        return el ? el.getAttribute(attribute) : null;
-                    };
-
-                    // Table data scraping
-                    const tableData = (() => {
-                        const rows = document.querySelectorAll('tbody tr');
-                        return Array.from(rows, row => {
-                            const cells = row.querySelectorAll('td');
-                            if (cells.length === 0) return null;
-
-                            return {
-                                rank: safeGetText(row, 'td:first-child'),
-                                player: {
-                                    name: safeGetText(row, '.p-name'),
-                                    image: safeGetAttribute(row, '.player-img img', 'src')
-                                },
-                                team: {
-                                    name: safeGetText(row, '.team'),
-                                    image: safeGetAttribute(row, '.team-flag img', 'src')
-                                },
-                                strikeRate: safeGetText(row, 'td:nth-child(4)'),
-                                matches: safeGetText(row, 'td:nth-child(5)'),
-                                innings: safeGetText(row, 'td:nth-child(6)'),
-                                highestScore: safeGetText(row, 'td:nth-child(7)'),
-                                average: safeGetText(row, 'td:nth-child(8)'),
-                                runs: safeGetText(row, 'td:nth-child(9)'),
-                                hundreds: safeGetText(row, 'td:nth-child(10)'),
-                                fifties: safeGetText(row, 'td:nth-child(11)'),
-                                fours: safeGetText(row, 'td:nth-child(12)'),
-                                sixes: safeGetText(row, 'td:nth-child(13)')
-                            };
-                        }).filter(Boolean);
-                    })();
-
-                    // Stats corner data scraping
-                    const statsCornerData = (() => {
-                        const statsHeader = document.querySelector('.stats-header');
-                        if (!statsHeader) return null;
-
-                        const title = safeGetText(statsHeader, '.heading-wrapper h1 span');
-
-                        const players = Array.from(statsHeader.querySelectorAll('.player-img')).map(playerDiv => ({
-                            name: safeGetText(playerDiv, 'p'),
-                            score: safeGetText(playerDiv, '.score'),
-                            image: safeGetAttribute(playerDiv, 'img', 'src')
-                        }));
-
-                        return { title, players };
-                    })();
-
-                    return { tableData, statsCornerData };
-                });
-
-                return data;
-            } catch (error) {
-                console.error(`Attempt ${retry + 1} failed:`, error);
-                if (retry === maxRetries - 1) throw error;
-                await new Promise(resolve => setTimeout(resolve, 5000));  // Wait 5 seconds before retrying
-            }
-        }
+        const data = await scrapeAndSaveSeries(process.env.BASE + '/fixtures/series-list')
+        res.json(data);
     } catch (error) {
-        console.error('Scraping failed after max retries:', error);
-        throw error;
-    } finally {
-        if (browser) await browser.close();
+        console.error('Error scraping navbar data:', error);
+        res.status(500).json({ error: 'Failed to scrape navbar data' });
     }
-}
+});
 
-async function autoScroll(page) {
-    await page.evaluate(async () => {
-        await new Promise((resolve) => {
-            let totalHeight = 0;
-            const distance = 100;
-            const timer = setInterval(() => {
-                const scrollHeight = document.body.scrollHeight;
-                window.scrollBy(0, distance);
-                totalHeight += distance;
+app.get('/api/series/:slug/:subSlug', async (req, res) => {
+    try {
+        const { slug, subSlug } = req.params;
+        const cacheKey = `${slug}_${subSlug}`;
 
-                if (totalHeight >= scrollHeight) {
-                    clearInterval(timer);
-                    resolve();
-                }
-            }, 100);
-        });
-    });
-}
+        // Check if the data is in the cache
+        let data = cache.get(cacheKey);
+
+        if (!data) {
+            // If not in the cache, scrape the data
+            data = await seriesScrapper(process.env.BASE + '/series/' + slug + "/" + subSlug);
+
+            // Store the result in the cache
+            cache.set(cacheKey, data);
+        }
+
+        res.json({ data });
+    } catch (error) {
+        console.error('Error:', error);
+        res.status(500).json({ error: 'Failed to retrieve series' });
+    }
+});
+
+app.get('/api/scoreboard/:param1/:param2/:param3/:param4/:param5/:param6/:sub', async (req, res) => {
+    const { param1, param2, param3, param4, param5, param6, sub } = req.params;
+
+    // Construct the URL using the parameters
+    const url = `${process.env.BASE}/scoreboard/${param1}/${param2}/${param3}/${param4}/${param5}/${param6}/${sub}`;
+    console.log(url)
+    try {
+        let data;
+        // Call different scraper functions based on the type
+        switch (sub) {
+            case 'live':
+                data = await scrapeLiveMatchInfo(url);
+                break;
+            case 'info':
+                data = await scrapeMatchInfoDetails(url);
+                break;
+            case 'scorecard':
+                data = await scrapeScorecardInfo(url);
+                break;
+            default:
+                res.status(400).json({ error: 'Invalid type specified' });
+                return;
+        }
+
+        res.json(data);
+    } catch (error) {
+        console.error('Error occurred:', error);
+        res.status(500).json({ error: 'Failed to retrieve match details' });
+    }
+});
+
+app.get('/api/scoreboard/commentary/:param1/:param2/:param3/:param4/:param5/:param6/:startOver/:endOver', async (req, res) => {
+    const { param1, param2, param3, param4, param5, param6, startOver, endOver } = req.params;
+
+    // Construct the URL for scraping
+    const url = `${process.env.BASE}/scoreboard/${param1}/${param2}/${param3}/${param4}/${param5}/${param6}/info`;
+
+    try {
+        const commentaryData = await scrapeCommentary(url, startOver, endOver);
+        res.json(commentaryData);
+    } catch (error) {
+        console.error('Error occurred while fetching commentary:', error);
+        res.status(500).json({ error: 'Failed to retrieve commentary' });
+    }
+});
+
 app.get('/api/stats-corner', async function (req, res) {
     try {
         const urlList = [
