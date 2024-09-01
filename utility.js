@@ -1,17 +1,16 @@
-const puppeteer = require('puppeteer');
-const chromium = require("@sparticuz/chromium");
+const chromium = require('chrome-aws-lambda');
 
 async function initBrowserAndPage() {
     let browser;
     let page;
     if (!browser) {
-        browser = await puppeteer.launch({
-            args: chromium.args,
+        await chromium.puppeteer.launch({
+            args: [...chromium.args, "--hide-scrollbars", "--disable-web-security"],
             defaultViewport: chromium.defaultViewport,
-            executablePath: await chromium.executablePath(),
-            headless: chromium.headless,
+            executablePath: await chromium.executablePath,
+            headless: true,
             ignoreHTTPSErrors: true,
-        });
+        })
     }
 
     // Always create a new page for each request

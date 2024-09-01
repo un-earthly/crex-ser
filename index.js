@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const app = express();
 const PORT = process.env.PORT || 5000;
+// const chromium = require("@sparticuz/chromium");
 const connectDB = require('./db.config');
 const { config } = require('dotenv');
 const NodeCache = require('node-cache');
@@ -19,19 +20,17 @@ let page;
 
 async function initBrowserAndPage() {
     if (!browser) {
-        browser = await puppeteer.launch({
-            args: chromium.args,
+        await chromium.puppeteer.launch({
+            args: [...chromium.args, "--hide-scrollbars", "--disable-web-security"],
             defaultViewport: chromium.defaultViewport,
             executablePath: await chromium.executablePath,
-            headless: chromium.headless,
+            headless: true,
             ignoreHTTPSErrors: true,
-        });
+        })
     }
 
-    const page = await browser.newPage();
-    await page.setDefaultNavigationTimeout(30000); // 30 seconds timeout
-
-    return page
+    // Always create a new page for each request
+    page = await browser.newPage();
 }
 const cache = new NodeCache({ stdTTL: 3600 });
 
