@@ -2,13 +2,12 @@ const express = require('express');
 const cors = require('cors');
 const app = express();
 const PORT = process.env.PORT || 5000;
-// const chromium = require("@sparticuz/chromium");
+const chromium = require("@sparticuz/chromium");
 const connectDB = require('./db.config');
 const { config } = require('dotenv');
 const NodeCache = require('node-cache');
 const { getCacheKey } = require('./utility');
-const chromium = require('chrome-aws-lambda');
-
+const { default: puppeteer } = require('puppeteer');
 config()
 app.use(cors())
 app.use(express.json())
@@ -20,13 +19,13 @@ let page;
 
 async function initBrowserAndPage() {
     if (!browser) {
-        await chromium.puppeteer.launch({
-            args: [...chromium.args, "--hide-scrollbars", "--disable-web-security"],
+        browser = await puppeteer.launch({
+            args: chromium.args,
             defaultViewport: chromium.defaultViewport,
-            executablePath: await chromium.executablePath,
-            headless: true,
+            executablePath: await chromium.executablePath(),
+            headless: chromium.headless,
             ignoreHTTPSErrors: true,
-        })
+        });
     }
 
     // Always create a new page for each request

@@ -12,6 +12,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@sparticuz/chromium": "^127.0.0",
     "chrome-aws-lambda": "10.1.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
