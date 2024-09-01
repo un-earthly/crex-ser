@@ -15,21 +15,23 @@ app.use(express.json())
 
 let db;
 let browser;
-let page;
 
 async function initBrowserAndPage() {
     if (!browser) {
-        browser = await puppeteer.launch({
-            args: chromium.args,
-            defaultViewport: chromium.defaultViewport,
-            executablePath: await chromium.executablePath(),
-            headless: chromium.headless,
-            ignoreHTTPSErrors: true,
-        });
+        try {
+            browser = await puppeteer.launch({
+                args: chromium.args,
+                defaultViewport: chromium.defaultViewport,
+                executablePath: await chromium.executablePath(),
+                headless: chromium.headless,
+                ignoreHTTPSErrors: true,
+            });
+        } catch (error) {
+            console.error('Failed to launch browser:', error);
+            throw new Error('Browser initialization failed');
+        }
     }
-
-    // Always create a new page for each request
-    page = await browser.newPage();
+    return browser.newPage();
 }
 const cache = new NodeCache({ stdTTL: 3600 });
 
@@ -164,19 +166,12 @@ async function matchesScrapper(url) {
         return cachedData;
     }
 
-    await initBrowserAndPage()
 
 
     try {
+        let page = await initBrowserAndPage()
         await page.setDefaultNavigationTimeout(60000);
         await page.setRequestInterception(true);
-        page.on('request', (request) => {
-            if (['image', 'stylesheet', 'font'].indexOf(request.resourceType()) !== -1) {
-                request.abort();
-            } else {
-                request.continue();
-            }
-        });
 
         await page.goto(url, { waitUntil: 'networkidle0' });
         await page.waitForSelector('.live-card', { timeout: 60000 });
@@ -290,9 +285,9 @@ async function matchesScrapper(url) {
 }
 
 async function scrapeRankings(url) {
-    await initBrowserAndPage()
 
     try {
+        let page = await initBrowserAndPage()
         await page.goto(url, { waitUntil: 'networkidle0' });
 
         await page.waitForSelector('.card_wrapper', { timeout: 10000 });
@@ -357,10 +352,10 @@ async function scrapeRankings(url) {
 }
 
 async function scrapeCricketRankings(url) {
-    await initBrowserAndPage()
 
 
     try {
+        let page = await initBrowserAndPage()
         await page.goto(url, { waitUntil: 'networkidle0' });
 
         const rankings = await page.evaluate(() => {
@@ -407,8 +402,8 @@ async function scrapeCricketRankings(url) {
 }
 
 async function scrapeNavBarData() {
-    await initBrowserAndPage()
 
+    let page = await initBrowserAndPage()
     await page.goto('https://crex.live/', { waitUntil: 'domcontentloaded' });
 
     // Wait for the navigation bar to load
@@ -460,7 +455,7 @@ async function scrapeNavBarData() {
 
 
 async function seriesScrapper(url) {
-    await initBrowserAndPage()
+    let page = await initBrowserAndPage()
 
     try {
         await page.goto(url, { waitUntil: 'networkidle0' });
@@ -554,7 +549,7 @@ async function seriesScrapper(url) {
 
 
 async function scrapeTeamSquad(url) {
-    await initBrowserAndPage()
+    let page = await initBrowserAndPage()
 
     await page.goto(url, { waitUntil: 'networkidle0' });
 
@@ -595,7 +590,7 @@ async function scrapeTeamSquad(url) {
 
 
 async function scrapeSeriesInfo(url) {
-    await initBrowserAndPage()
+    let page = await initBrowserAndPage()
 
     try {
         await page.goto(url, { waitUntil: 'networkidle0' });
@@ -645,7 +640,7 @@ async function scrapeSeriesInfo(url) {
     }
 }
 async function scrapeMatchesInfo(url) {
-    await initBrowserAndPage()
+    let page = await initBrowserAndPage()
 
 
     try {
@@ -704,7 +699,7 @@ async function scrapeMatchesInfo(url) {
 
 
 async function scrapeSeriesStats(url) {
-    await initBrowserAndPage()
+    let page = await initBrowserAndPage()
 
 
     try {
@@ -783,7 +778,7 @@ async function scrapeSeriesStats(url) {
 }
 
 async function scrapePointsTable(url) {
-    await initBrowserAndPage()
+    let page = await initBrowserAndPage()
 
     try {
         await page.goto(url, { waitUntil: 'networkidle0' });
@@ -827,7 +822,7 @@ async function scrapePointsTable(url) {
     }
 }
 async function scrapeSeriesNews(url) {
-    await initBrowserAndPage()
+    let page = await initBrowserAndPage()
 
 
     try {
@@ -872,7 +867,7 @@ async function scrapeSeriesNews(url) {
 }
 
 async function scrapTeamList(url) {
-    await initBrowserAndPage()
+    let page = await initBrowserAndPage()
 
 
     try {
@@ -906,7 +901,7 @@ async function scrapTeamList(url) {
     }
 }
 const getMatchDetailsLayout = async (url) => {
-    await initBrowserAndPage()
+    let page = await initBrowserAndPage()
 
     await page.goto(url, { waitUntil: 'networkidle2' });
 
@@ -941,7 +936,7 @@ const getMatchDetailsLayout = async (url) => {
 
 
 async function scrapeMatchInfoDetails(url) {
-    await initBrowserAndPage()
+    let page = await initBrowserAndPage()
 
     try {
         await page.goto(url, { waitUntil: 'networkidle2' });
@@ -1227,7 +1222,7 @@ async function scrapeScorecardInfo(url) {
 
 
 async function scrapeLiveMatchInfo(url) {
-    await initBrowserAndPage()
+    let page = await initBrowserAndPage()
 
 
     try {
@@ -1354,7 +1349,7 @@ async function scrapeLiveMatchInfo(url) {
 }
 
 async function scrapeCommentary(url, limit) {
-    await initBrowserAndPage()
+    let page = await initBrowserAndPage()
 
 
     try {
@@ -1435,7 +1430,7 @@ async function getTeams(page = 1, pageSize = 10, searchTerm = '') {
 };
 
 async function scrapeAndSaveSeries(url) {
-    await initBrowserAndPage()
+    let page = await initBrowserAndPage()
 
     try {
         await page.goto(url, { waitUntil: 'networkidle0' });
@@ -1482,6 +1477,8 @@ async function scrapeAndSaveSeries(url) {
 }
 async function scrapeTableData(url, maxRetries = 3) {
     try {
+        let page = await initBrowserAndPage()
+
         page.setDefaultNavigationTimeout(60000);
 
         for (let retry = 0; retry < maxRetries; retry++) {
@@ -1592,7 +1589,7 @@ async function autoScroll(page) {
 
 
 async function scrapeCricketMatches() {
-    await initBrowserAndPage()
+    let page = await initBrowserAndPage()
     await page.goto(process.env.BASE + '/fixtures/match-list', { waitUntil: 'networkidle0' });
     await page.waitForSelector('#date-wise-wrap');
 
@@ -1933,8 +1930,8 @@ app.get('/api/get-suffle-list', async function (req, res) {
     const baseUrl = 'https://crex.live/stats/most-runs-in-asia-cup-2022?m=0&sid=1&sn=11J&vn=6U&tm=T&fmt=2&isT=6&yr=2022';
     const numberOfClicks = 100;
 
-    const browser = await puppeteer.launch({ headless: true }); // Set to true for production
-    const page = await browser.newPage();
+    let page = await initBrowserAndPage()
+
 
     await page.goto(baseUrl, { waitUntil: 'networkidle0' });
 
