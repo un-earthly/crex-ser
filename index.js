@@ -1,13 +1,13 @@
 const express = require('express');
-const puppeteer = require('puppeteer');
 const cors = require('cors');
 const app = express();
 const PORT = process.env.PORT || 5000;
-const chromium = require("@sparticuz/chromium");
-const { scrapeMatchData } = require('./controller/matchController');
 const connectDB = require('./db.config');
 const { config } = require('dotenv');
 const NodeCache = require('node-cache');
+const { getCacheKey } = require('./utility');
+const chromium = require('chrome-aws-lambda');
+
 config()
 app.use(cors())
 app.use(express.json())
@@ -22,104 +22,100 @@ async function initBrowserAndPage() {
         browser = await puppeteer.launch({
             args: chromium.args,
             defaultViewport: chromium.defaultViewport,
-            executablePath: await chromium.executablePath(),
+            executablePath: await chromium.executablePath,
             headless: chromium.headless,
             ignoreHTTPSErrors: true,
         });
     }
 
-    // Always create a new page for each request
-    page = await browser.newPage();
-    await page.goto('https://crex.live/', { waitUntil: 'domcontentloaded' });
+    const page = await browser.newPage();
+    await page.setDefaultNavigationTimeout(30000); // 30 seconds timeout
+
+    return page
 }
+const cache = new NodeCache({ stdTTL: 3600 });
 
 
-app.post('/api/clickReadMore', async (req, res) => {
-    try {
+// app.post('/api/clickReadMore', async (req, res) => {
+//     try {
 
-        await initBrowserAndPage();
+//         await initBrowserAndPage();
 
-        if (!db) {
-            db = await connectDB(); // Await the connection to ensure `db` is ready
-            if (!db) {
-                throw new Error('Database connection failed');
-            }
-        }
+//         if (!db) {
+//             db = await connectDB(); // Await the connection to ensure `db` is ready
+//             if (!db) {
+//                 throw new Error('Database connection failed');
+//             }
+//         }
 
-        // Wait for the button to be available
-        await page.waitForSelector('div.more-button span', { visible: true });
+//         // Wait for the button to be available
+//         await page.waitForSelector('div.more-button span', { visible: true });
 
-        // Click the button
-        await page.evaluate(async () => {
-            const button = document.querySelector('div.more-button span');
-            if (button) {
-                for (let i = 0; i < 11; i++) {
-                    button.click();
-                    await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 1 second between clicks
-                }
-            } else {
-                throw new Error('Button not found');
-            }
-        });
+//         // Click the button
+//         await page.evaluate(async () => {
+//             const button = document.querySelector('div.more-button span');
+//             if (button) {
+//                 for (let i = 0; i < 11; i++) {
+//                     button.click();
+//                     await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 1 second between clicks
+//                 }
+//             } else {
+//                 throw new Error('Button not found');
+//             }
+//         });
 
 
-        // Wait for new content to load
-        await page.waitForSelector('section.news-topic-wrapper');
+//         // Wait for new content to load
+//         await page.waitForSelector('section.news-topic-wrapper');
 
-        // Scrape the data
-        const data = await page.evaluate(() => {
-            const cards = [];
-            const cardElements = document.querySelectorAll('section.news-topic-wrapper .card-wrapper');
+//         // Scrape the data
+//         const data = await page.evaluate(() => {
+//             const cards = [];
+//             const cardElements = document.querySelectorAll('section.news-topic-wrapper .card-wrapper');
 
-            cardElements.forEach(card => {
-                const title = card.querySelector('.heading h2').innerText.trim();
-                const imageUrl = card.querySelector('.news-card-img img').src;
-                const link = card.querySelector('.news-card-img a').href;
-                const tags = Array.from(card.querySelectorAll('.news-tag ul li a')).map(tag => tag.innerText.trim());
-                const description = card.querySelector('.news-heading p').innerText.trim();
-                const time = card.querySelector('.news-time span').innerText.trim();
+//             cardElements.forEach(card => {
+//                 const title = card.querySelector('.heading h2').innerText.trim();
+//                 const imageUrl = card.querySelector('.news-card-img img').src;
+//                 const link = card.querySelector('.news-card-img a').href;
+//                 const tags = Array.from(card.querySelectorAll('.news-tag ul li a')).map(tag => tag.innerText.trim());
+//                 const description = card.querySelector('.news-heading p').innerText.trim();
+//                 const time = card.querySelector('.news-time span').innerText.trim();
 
-                cards.push({
-                    title,
-                    imageUrl,
-                    link,
-                    tags,
-                    description,
-                    time
-                });
-            });
+//                 cards.push({
+//                     title,
+//                     imageUrl,
+//                     link,
+//                     tags,
+//                     description,
+//                     time
+//                 });
+//             });
 
-            return cards;
-        });
-        // Close the page after scraping
-        await page.close();
+//             return cards;
+//         });
+//         // Close the page after scraping
+//         await page.close();
 
-        const result = await db.collection('news').insertMany(data);
+//         const result = await db.collection('news').insertMany(data);
 
-        res.json({ success: true, result, message: 'Read More button clicked successfully' });
-    } catch (error) {
-        console.error('Error:', error);
-        res.status(500).json({ error: 'An error occurred while clicking the Read More button' });
-    } finally {
-        if (page && !page.isClosed()) {
-            await page.close();
-        }
-    }
-});
+//         res.json({ success: true, result, message: 'Read More button clicked successfully' });
+//     } catch (error) {
+//         console.error('Error:', error);
+//         res.status(500).json({ error: 'An error occurred while clicking the Read More button' });
+//     } finally {
+//         if (page && !page.isClosed()) {
+//             await page.close();
+//         }
+//     }
+// });
 
 
 
 app.get('/api/news-blogs', async (req, res) => {
     try {
 
-        const browser = await puppeteer.launch({
-            args: chromium.args,
-            defaultViewport: chromium.defaultViewport,
-            executablePath: await chromium.executablePath(),
-            headless: chromium.headless,
-            ignoreHTTPSErrors: true,
-        });
-        const page = await browser.newPage();
+        await initBrowserAndPage();
+
 
         // Go to the target URL
         await page.goto('https://crex.live/', { waitUntil: 'domcontentloaded' });
@@ -163,20 +159,15 @@ app.get('/api/news-blogs', async (req, res) => {
         res.status(500).json({ error: 'Failed to scrape the data' });
     }
 });
-const cache = new NodeCache({ stdTTL: 3600 });
 
 async function matchesScrapper(url) {
     const cachedData = cache.get(url);
     if (cachedData) {
-        console.log('Returning cached data');
         return cachedData;
     }
 
-    const browser = await puppeteer.launch({
-        headless: "new",
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
-    });
-    const page = await browser.newPage();
+    await initBrowserAndPage()
+
 
     try {
         await page.setDefaultNavigationTimeout(60000);
@@ -189,14 +180,8 @@ async function matchesScrapper(url) {
             }
         });
 
-        console.log('Navigating to page...');
         await page.goto(url, { waitUntil: 'networkidle0' });
-        console.log('Page loaded');
-
-        console.log('Waiting for content to render...');
         await page.waitForSelector('.live-card', { timeout: 60000 });
-        console.log('Content rendered');
-
         const matches = await page.evaluate(() => {
             const matchCards = document.querySelectorAll('.live-card');
             return Array.from(matchCards).map(card => {
@@ -274,7 +259,6 @@ async function matchesScrapper(url) {
 
                 const upcomingTime = card.querySelector('.upcomingTime')?.getAttribute('title');
 
-                // Match date and start time extraction
                 const matchDate = card.querySelector('.upcomingTime')?.textContent.trim();
                 const startTimeElement = card.querySelector('.match-data');
                 const startTime = startTimeElement ? startTimeElement.textContent.trim() : null;
@@ -296,9 +280,6 @@ async function matchesScrapper(url) {
             });
         });
 
-        console.log(`Scraped ${matches.length} matches`);
-
-        // Cache the scraped data
         cache.set(url, matches);
 
         return matches;
@@ -309,23 +290,13 @@ async function matchesScrapper(url) {
         await browser.close();
     }
 }
-// Function to clear cache
-function clearCache() {
-    cache.flushAll();
-    console.log('Cache cleared');
-}
 
-// Function to get cache stats
-function getCacheStats() {
-    return cache.getStats();
-}
 async function scrapeRankings(url) {
-    const browser = await puppeteer.launch({ headless: "true" });
-    const page = await browser.newPage();
+    await initBrowserAndPage()
+
     try {
         await page.goto(url, { waitUntil: 'networkidle0' });
 
-        // Wait for a specific element to ensure the page has loaded
         await page.waitForSelector('.card_wrapper', { timeout: 10000 });
 
         const rankings = await page.evaluate(() => {
@@ -379,10 +350,8 @@ async function scrapeRankings(url) {
             return result;
         });
 
-        console.log('Rankings extracted:', rankings);
         return rankings;
     } catch (error) {
-        console.error('Error during scraping:', error);
         throw error;
     } finally {
         await browser.close();
@@ -390,9 +359,8 @@ async function scrapeRankings(url) {
 }
 
 async function scrapeCricketRankings(url) {
+    await initBrowserAndPage()
 
-    const browser = await puppeteer.launch();
-    const page = await browser.newPage();
 
     try {
         await page.goto(url, { waitUntil: 'networkidle0' });
@@ -441,14 +409,7 @@ async function scrapeCricketRankings(url) {
 }
 
 async function scrapeNavBarData() {
-    const browser = await puppeteer.launch({
-        args: chromium.args,
-        defaultViewport: chromium.defaultViewport,
-        executablePath: await chromium.executablePath(),
-        headless: chromium.headless,
-        ignoreHTTPSErrors: true,
-    });
-    const page = await browser.newPage();
+    await initBrowserAndPage()
 
     await page.goto('https://crex.live/', { waitUntil: 'domcontentloaded' });
 
@@ -501,8 +462,7 @@ async function scrapeNavBarData() {
 
 
 async function seriesScrapper(url) {
-    const browser = await puppeteer.launch({ headless: "new" });
-    const page = await browser.newPage();
+    await initBrowserAndPage()
 
     try {
         await page.goto(url, { waitUntil: 'networkidle0' });
@@ -596,8 +556,8 @@ async function seriesScrapper(url) {
 
 
 async function scrapeTeamSquad(url) {
-    const browser = await puppeteer.launch({ headless: "new" });
-    const page = await browser.newPage();
+    await initBrowserAndPage()
+
     await page.goto(url, { waitUntil: 'networkidle0' });
 
     const squadData = await page.evaluate(() => {
@@ -637,8 +597,7 @@ async function scrapeTeamSquad(url) {
 
 
 async function scrapeSeriesInfo(url) {
-    const browser = await puppeteer.launch({ headless: "new" });
-    const page = await browser.newPage();
+    await initBrowserAndPage()
 
     try {
         await page.goto(url, { waitUntil: 'networkidle0' });
@@ -688,8 +647,8 @@ async function scrapeSeriesInfo(url) {
     }
 }
 async function scrapeMatchesInfo(url) {
-    const browser = await puppeteer.launch({ headless: "new" });
-    const page = await browser.newPage();
+    await initBrowserAndPage()
+
 
     try {
         await page.goto(url, { waitUntil: 'networkidle0' });
@@ -744,55 +703,14 @@ async function scrapeMatchesInfo(url) {
     }
 };
 
+
+
 async function scrapeSeriesStats(url) {
-    const browser = await puppeteer.launch({ headless: "new" });
-    const page = await browser.newPage();
+    await initBrowserAndPage()
+
 
     try {
         await page.goto(url, { waitUntil: 'networkidle0' });
-
-        // const seriesStats = await page.evaluate(() => {
-        //     const statsWrapper = document.querySelector('.series-stats-wrapper');
-        //     if (!statsWrapper) return null;
-
-        //     const format = statsWrapper.querySelector('.format')?.textContent.trim() || '';
-        //     const cardWrapper = statsWrapper.querySelector('.card-wrapper');
-
-        //     if (!cardWrapper) return { format };
-
-        //     const team1 = cardWrapper.querySelector('.team-wrapper:first-child span')?.textContent.trim() || '';
-        //     const team2 = cardWrapper.querySelector('.team-wrapper:last-child span')?.textContent.trim() || '';
-
-        //     const metricWrapper = cardWrapper.querySelector('.metric-wrapper');
-        //     const scoreMetric = metricWrapper.querySelector('.metric')?.textContent.trim() || '';
-        //     const matchesInfo = metricWrapper.querySelector('.matches-info')?.textContent.trim() || '';
-        //     const result = metricWrapper.querySelector('.result span')?.textContent.trim() || '';
-        //     const tableWrapper = document.querySelector('app-series-points-table-shared');
-        //     if (!tableWrapper) return null;
-
-        //     const title = tableWrapper.querySelector('.title')?.textContent.trim() || '';
-        //     const headers = Array.from(tableWrapper.querySelectorAll('table th')).map(th => th.textContent.trim());
-
-        //     const rows = Array.from(tableWrapper.querySelectorAll('table tr')).slice(1).map(row => {
-        //         const cells = Array.from(row.querySelectorAll('td'));
-        //         const teamInfo = cells[0].querySelector('.team-wrapper');
-
-        //         return {
-        //             team: {
-        //                 name: teamInfo.querySelector('div')?.textContent.trim() || '',
-        //                 imageUrl: teamInfo.querySelector('img')?.src || ''
-        //             },
-        //             stats: headers.slice(1).reduce((acc, header, index) => {
-        //                 const cell = cells[index + 1];
-        //                 acc[header] = cell.classList.contains('points')
-        //                     ? { value: cell.textContent.trim(), isPoints: true }
-        //                     : cell.textContent.trim();
-        //                 return acc;
-        //             }, {})
-        //         };
-
-        //     })
-        // })
 
         const seriesStats = await page.evaluate(() => {
             const statsWrapper = document.querySelector('.series-stats-wrapper');
@@ -860,7 +778,6 @@ async function scrapeSeriesStats(url) {
 
 
     } catch (error) {
-        console.error('Error during series stats scraping:', error);
         throw error;
     } finally {
         await browser.close();
@@ -868,8 +785,7 @@ async function scrapeSeriesStats(url) {
 }
 
 async function scrapePointsTable(url) {
-    const browser = await puppeteer.launch({ headless: "new" });
-    const page = await browser.newPage();
+    await initBrowserAndPage()
 
     try {
         await page.goto(url, { waitUntil: 'networkidle0' });
@@ -913,8 +829,8 @@ async function scrapePointsTable(url) {
     }
 }
 async function scrapeSeriesNews(url) {
-    const browser = await puppeteer.launch({ headless: 'new' });
-    const page = await browser.newPage();
+    await initBrowserAndPage()
+
 
     try {
         await page.goto(url, { waitUntil: 'networkidle0' });
@@ -958,8 +874,8 @@ async function scrapeSeriesNews(url) {
 }
 
 async function scrapTeamList(url) {
-    const browser = await puppeteer.launch({ headless: "new" });
-    const page = await browser.newPage();
+    await initBrowserAndPage()
+
 
     try {
         await page.goto(url, { waitUntil: 'networkidle0' });
@@ -991,11 +907,43 @@ async function scrapTeamList(url) {
         throw error;
     }
 }
+const getMatchDetailsLayout = async (url) => {
+    await initBrowserAndPage()
+
+    await page.goto(url, { waitUntil: 'networkidle2' });
+
+    const result = await page.evaluate(() => {
+        const getTeamData = (teamSelector) => {
+            const teamElement = document.querySelector(teamSelector);
+            if (!teamElement) return null;
+            return {
+                name: teamElement.querySelector('.team-name')?.textContent.trim() || '',
+                score: teamElement.querySelector('.runs span:first-child')?.textContent.trim() || '',
+                overs: teamElement.querySelector('.runs span:last-child')?.textContent.trim() || '',
+                imageUrl: teamElement.querySelector('img')?.src || ''
+            };
+        };
+
+        const team1 = getTeamData('.team-inning:first-child');
+        const team2 = getTeamData('.team-inning.second-inning');
+        const result = document.querySelector('.result-box span')?.textContent.trim() || '';
+        const matchName = document.querySelector('.name-wrapper span')?.textContent.trim() || '';
+
+        return {
+            team1,
+            team2,
+            matchName,
+            result
+        };
+    });
+
+    await browser.close();
+    return result;
+};
 
 
 async function scrapeMatchInfoDetails(url) {
-    const browser = await puppeteer.launch({ headless: "new" });
-    const page = await browser.newPage();
+    await initBrowserAndPage()
 
     try {
         await page.goto(url, { waitUntil: 'networkidle2' });
@@ -1006,21 +954,6 @@ async function scrapeMatchInfoDetails(url) {
         await page.waitForSelector(".table-responsive", { visible: true });
         await page.waitForSelector(".global-card-wrap", { visible: true });
         const matchDetails = await page.evaluate(() => {
-            const getTeamData = (teamSelector) => {
-                const teamElement = document.querySelector(teamSelector);
-                if (!teamElement) return null;
-                return {
-                    name: teamElement.querySelector('.team-name')?.textContent.trim() || '',
-                    score: teamElement.querySelector('.runs span:first-child')?.textContent.trim() || '',
-                    overs: teamElement.querySelector('.runs span:last-child')?.textContent.trim() || '',
-                    imageUrl: teamElement.querySelector('img')?.src || ''
-                };
-            };
-
-            const team1 = getTeamData('.team-inning:first-child');
-            const team2 = getTeamData('.team-inning.second-inning');
-            const result = document.querySelector('.result-box span')?.textContent.trim() || '';
-            const matchName = document.querySelector('.name-wrapper span')?.textContent.trim() || '';
             const contentWrap = document.querySelector('.content-wrap.s-wrap');
             let seriesInfo = null;
             if (contentWrap) {
@@ -1088,10 +1021,6 @@ async function scrapeMatchInfoDetails(url) {
 
 
             return {
-                matchName,
-                team1,
-                team2,
-                result,
                 seriesInfo,
                 teamForm: {
                     ...team1Form
@@ -1290,7 +1219,9 @@ async function scrapeMatchInfoDetails(url) {
     } finally {
         await browser.close();
     }
-}
+};
+
+
 async function scrapeScorecardInfo(url) {
     console.log(url)
     return {}
@@ -1298,29 +1229,13 @@ async function scrapeScorecardInfo(url) {
 
 
 async function scrapeLiveMatchInfo(url) {
-    console.log(url);
-    const browser = await puppeteer.launch({ headless: false });
-    const page = await browser.newPage();
+    await initBrowserAndPage()
+
 
     try {
         // Navigate to the webpage
-        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
-
-        const loadAllContent = async () => {
-            while (true) {
-                let lastHeight = await page.evaluate('document.body.scrollHeight');
-                await page.evaluate('window.scrollTo(0, document.body.scrollHeight)');
-                await page.waitForFunction(`document.body.scrollHeight > ${lastHeight}`);
-                await new Promise(resolve => setTimeout(resolve, 500));
-
-            }
-        };
-
-        await loadAllContent();
-
-        // Wait for required elements to load
-        await page.waitForSelector('.player-card-wrapper', { timeout: 10000 });
-        await page.waitForSelector('.overs-slide', { timeout: 10000 });
+        await page.goto(url, { waitUntil: 'domcontentloaded' });
+        await page.waitForSelector('.overs-slide');
 
         // Scrape player data
         const playersData = await page.evaluate(() => {
@@ -1355,7 +1270,6 @@ async function scrapeLiveMatchInfo(url) {
             });
         });
 
-        // Scrape probability data
         const probability = await page.evaluate(() => {
             const teamNames = Array.from(document.querySelectorAll('.odds-session-left .teamNameScreenText'))
                 .map(el => el.textContent.trim());
@@ -1365,7 +1279,6 @@ async function scrapeLiveMatchInfo(url) {
             return { teams: teamNames, percentages, progressBarWidth };
         });
 
-        // Scrape projected score
         const projectedScore = await page.evaluate(() => {
             const headers = document.querySelectorAll('.projected-score .p-score thead th span.rr-text.rr-data');
             const rows = document.querySelectorAll('.projected-score .p-score tbody tr');
@@ -1378,21 +1291,23 @@ async function scrapeLiveMatchInfo(url) {
                 })
             };
         });
+        const playerOfTheMatch = await page.evaluate(() => {
+            const pomCard = document.querySelector('.player-of-match-card');
+            if (!pomCard) return null;
 
-        // Scrape commentary
-        const commentary = await page.evaluate(() => {
-            const roundcards = document.querySelectorAll('.cm-b-roundcard');
-            return Array.from(roundcards).map(card => {
-                return {
-                    over: card.querySelector('.cm-b-over')?.textContent.trim() || '',
-                    ballUpdate: card.querySelector('.cm-b-ballupdate')?.textContent.trim() || '',
-                    commentaryText: card.querySelector('.cm-b-comment-c1')?.textContent.trim() || '',
-                    description: card.querySelector('.cm-b-comment-c2')?.textContent.trim() || ''
-                };
-            });
+            const playerLink = pomCard.querySelector('a');
+            const playerName = pomCard.querySelector('.mom-player')?.textContent.trim();
+            const team = pomCard.querySelector('.profile span:not(.mom-player)')?.textContent.trim();
+            const performanceData = Array.from(pomCard.querySelectorAll('.data-card-pom')).map(card => card.textContent.trim());
+
+            return {
+                name: playerName || null,
+                team: team || null,
+                link: playerLink?.href.replace("https://crex.live", "") || null,
+                performance: performanceData
+            };
         });
 
-        // Scrape inning-wise session PR
         const inningWiseSessionPR = await page.evaluate(() => {
             const sessions = document.querySelectorAll('app-match-inning-wise-session');
             return Array.from(sessions).map(session => {
@@ -1431,7 +1346,7 @@ async function scrapeLiveMatchInfo(url) {
             projectedScore,
             probability,
             inningWiseSessionPR,
-            commentary
+            playerOfTheMatch
         };
     } catch (error) {
         console.error('Error scraping live match info:', error);
@@ -1439,56 +1354,51 @@ async function scrapeLiveMatchInfo(url) {
         await browser.close();
     }
 }
-// API function to scrape and save team data
-// async function scrapeAndSaveTeams(url) {
-//     const browser = await puppeteer.launch({
-//         headless: "new",
-//         args: ['--no-sandbox', '--disable-setuid-sandbox']
-//     });
-//     const page = await browser.newPage();
 
-//     try {
-//         await page.goto(url, { waitUntil: 'networkidle0' });
+async function scrapeCommentary(url, limit) {
+    await initBrowserAndPage()
 
-//         const teamData = await page.evaluate(() => {
-//             const teams = [];
-//             const teamElements = document.querySelectorAll('.team-div');
 
-//             teamElements.forEach((teamElement) => {
-//                 const teamName = teamElement.querySelector('.team-name').textContent.trim();
-//                 const flagUrl = teamElement.querySelector('.team-flag').src;
+    try {
+        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
 
-//                 teams.push({
-//                     name: teamName,
-//                     flagUrl: flagUrl
-//                 });
-//             });
+        let commentary = [];
 
-//             return teams;
-//         });
+        for (let i = 0; i < limit; i++) {
+            // Scroll to the bottom of the page
+            await page.evaluate(() => {
+                window.scrollTo(0, document.body.scrollHeight);
+            });
 
-//         await browser.close();
+            await new Promise(resolve => setTimeout(resolve, 500));
 
-//         if (!db) {
-//             db = await connectDB();
-//             if (!db) {
-//                 throw new Error('Database connection failed');
-//             }
-//         }
+            // Scrape commentary data
+            const newCommentary = await page.evaluate(() => {
+                const roundcards = document.querySelectorAll('.cm-b-roundcard');
+                return Array.from(roundcards).map(card => {
+                    return {
+                        over: card.querySelector('.cm-b-over')?.textContent.trim() || '',
+                        ballUpdate: card.querySelector('.cm-b-ballupdate')?.textContent.trim() || '',
+                        commentaryText: card.querySelector('.cm-b-comment-c1')?.textContent.trim() || '',
+                        description: card.querySelector('.cm-b-comment-c2')?.textContent.trim() || ''
+                    };
+                });
+            });
 
-//         const teamsCollection = db.collection("teams");
+            // Merge the new commentary with existing ones
+            commentary = [...commentary, ...newCommentary];
+        }
 
-//         // Insert the scraped data into MongoDB
-//         const result = await teamsCollection.insertMany(teamData);
-//         console.log(`${result.insertedCount} teams were inserted into the database`);
+        await browser.close();
+        return commentary;
+    } catch (error) {
+        console.error('Error scraping commentary:', error);
+        await browser.close();
+        throw error;
+    }
+}
 
-//         return { message: `${result.insertedCount} teams were successfully scraped and saved.` };
 
-//     } catch (error) {
-//         console.error('Error during scraping or database operation:', error);
-//         throw error;
-//     }
-// }
 
 async function getTeams(page = 1, pageSize = 10, searchTerm = '') {
     try {
@@ -1527,11 +1437,7 @@ async function getTeams(page = 1, pageSize = 10, searchTerm = '') {
 };
 
 async function scrapeAndSaveSeries(url) {
-    const browser = await puppeteer.launch({
-        headless: "new",
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
-    });
-    const page = await browser.newPage();
+    await initBrowserAndPage()
 
     try {
         await page.goto(url, { waitUntil: 'networkidle0' });
@@ -1577,11 +1483,8 @@ async function scrapeAndSaveSeries(url) {
     }
 }
 async function scrapeTableData(url, maxRetries = 3) {
-    let browser;
     try {
-        browser = await puppeteer.launch({ headless: 'new' });
-        const page = await browser.newPage();
-        page.setDefaultNavigationTimeout(60000);  // Increase timeout to 60 seconds
+        page.setDefaultNavigationTimeout(60000);
 
         for (let retry = 0; retry < maxRetries; retry++) {
             try {
@@ -1688,22 +1591,10 @@ async function autoScroll(page) {
 }
 
 
-// Middleware for input validation
-const validateParams = (req, res, next) => {
-    const { slug, subSlug, subroute } = req.params;
-    if (!slug || !subSlug || !subroute) {
-        return res.status(400).json({ error: 'Missing required parameters' });
-    }
-    next();
-};
-
-// Helper function to get cache key
-const getCacheKey = (slug, subSlug, subroute) => `${slug}:${subSlug}:${subroute}`;
 
 
 async function scrapeCricketMatches() {
-    const browser = await puppeteer.launch({ headless: true });
-    const page = await browser.newPage();
+    await initBrowserAndPage()
     await page.goto(process.env.BASE + '/fixtures/match-list', { waitUntil: 'networkidle0' });
     await page.waitForSelector('#date-wise-wrap');
 
@@ -1752,35 +1643,35 @@ async function scrapeCricketMatches() {
     await browser.close();
     return matchesByDate;
 }
+
+
 app.get('/api/fixtures/match-list', async (req, res) => {
     try {
-        // Check if data is in cache
         const cachedData = cache.get('match-list');
         if (cachedData) {
             console.log('Serving from cache');
             return res.json(cachedData);
         }
 
-        // If not in cache, scrape the data
-        console.log('Scraping fresh data');
         const matches = await scrapeCricketMatches();
 
-        // Store in cache
         cache.set('matches', matches);
 
         res.json(matches);
     } catch (error) {
-        console.error('Error:', error);
         res.status(500).json({ error: 'An error occurred while fetching the data' });
     }
 });
 
-app.get('/api/series/:slug/:subSlug/:subroute', validateParams, async (req, res) => {
+app.get('/api/series/:slug/:subSlug/:subroute', async (req, res) => {
+    const { slug, subSlug, subroute } = req.params;
+    if (!slug || !subSlug || !subroute) {
+        return res.status(400).json({ error: 'Missing required parameters' });
+    }
     try {
         const { slug, subSlug, subroute } = req.params;
         const cacheKey = getCacheKey(slug, subSlug, subroute);
 
-        // Check cache first
         const cachedData = cache.get(cacheKey);
         if (cachedData) {
             console.log('Returning cached data for', cacheKey);
@@ -1813,12 +1704,10 @@ app.get('/api/series/:slug/:subSlug/:subroute', validateParams, async (req, res)
                 return res.status(404).json({ error: 'Invalid subroute' });
         }
 
-        // Cache the data
         cache.set(cacheKey, data);
 
         res.json({ data });
     } catch (error) {
-        console.error('Error:', error);
         res.status(500).json({ error: 'Failed to retrieve series data', details: error.message });
     }
 });
@@ -1852,7 +1741,6 @@ app.get('/api/rankings/:gen/:cat', async function (req, res) {
         const data = await scrapeFunction(url);
         res.json(data);
     } catch (error) {
-        console.error('Error in rankings route:', error);
         res.status(500).send('An error occurred while fetching rankings');
     }
 });
@@ -1878,7 +1766,6 @@ app.get('/api/nav', async (req, res) => {
         cache.set('navData', navData);
         res.json(navData);
     } catch (error) {
-        console.error('Error scraping navbar data:', error);
         res.status(500).json({ error: 'Failed to scrape navbar data' });
     }
 });
@@ -1889,10 +1776,8 @@ app.get('/api/scrape-team-list', async (req, res) => {
         const cachedData = cache.get('team-list');
 
         if (cachedData) {
-            console.log('Returning cached data');
             res.json(cachedData);
         } else {
-            console.log('Fetching fresh data');
             const data = await scrapTeamList(process.env.BASE + '/fixtures/team-list');
             cache.set('team-list', data, 3600);
             res.json(data);
@@ -1917,8 +1802,6 @@ app.get('/api/team-list', async (req, res) => {
 app.get('/api/matches', async (req, res) => {
     try {
         let data = await matchesScrapper(process.env.BASE)
-        // data = await matchesScrapper(process.env.BASE);
-        console.log(getCacheStats());
         res.json(data);
     } catch (error) {
         console.error('Error scraping the data:', error);
@@ -1988,15 +1871,35 @@ app.get('/api/scoreboard/:param1/:param2/:param3/:param4/:param5/:param6/:sub', 
         res.status(500).json({ error: 'Failed to retrieve match details' });
     }
 });
+// getMatchDetailsLayout
+app.get('/api/layout/:param1/:param2/:param3/:param4/:param5/:param6', async (req, res) => {
+    const { param1, param2, param3, param4, param5, param6 } = req.params;
 
-app.get('/api/scoreboard/commentary/:param1/:param2/:param3/:param4/:param5/:param6/:startOver/:endOver', async (req, res) => {
-    const { param1, param2, param3, param4, param5, param6, startOver, endOver } = req.params;
-
-    // Construct the URL for scraping
-    const url = `${process.env.BASE}/scoreboard/${param1}/${param2}/${param3}/${param4}/${param5}/${param6}/info`;
+    const cacheKey = `${param1}-${param2}-${param3}-${param4}-${param5}-${param6}}`;
 
     try {
-        const commentaryData = await scrapeCommentary(url, startOver, endOver);
+        let data = cache.get(cacheKey);
+
+        if (data == undefined) {
+            const url = `${process.env.BASE}/scoreboard/${param1}/${param2}/${param3}/${param4}/${param5}/${param6}`;
+            data = await getMatchDetailsLayout(url);
+            cache.set(cacheKey, data);
+        }
+
+        res.json(data);
+    } catch (error) {
+        console.error('Error occurred:', error);
+        res.status(500).json({ error: 'Failed to retrieve match details' });
+    }
+});
+app.get('/api/scoreboard/com/:param1/:param2/:param3/:param4/:param5/:param6/:limit', async (req, res) => {
+    const { param1, param2, param3, param4, param5, param6, limit } = req.params;
+
+    // Construct the URL for scraping
+    const url = `${process.env.BASE}/scoreboard/${param1}/${param2}/${param3}/${param4}/${param5}/${param6}/live`;
+
+    try {
+        const commentaryData = await scrapeCommentary(url, limit);
         res.json(commentaryData);
     } catch (error) {
         console.error('Error occurred while fetching commentary:', error);
@@ -2077,63 +1980,61 @@ app.get('/api/get-suffle-list', async function (req, res) {
 });
 
 
-app.get('/api/series-list', async (req, res) => {
-    try {
+// app.get('/api/series-list', async (req, res) => {
+//     try {
 
-        if (!db) {
-            db = await connectDB();
-            if (!db) {
-                throw new Error('Database connection failed');
-            }
-        }
+//         if (!db) {
+//             db = await connectDB();
+//             if (!db) {
+//                 throw new Error('Database connection failed');
+//             }
+//         }
+//         initBrowserAndPage()
+//         await page.goto(process.env.BASE + '/fixtures/series-list');
+//         await page.waitForSelector('.series-card', { timeout: 60000 });
 
-        const browser = await puppeteer.launch({ headless: false });
-        const page = await browser.newPage();
-        await page.goto(process.env.BASE + '/fixtures/series-list');
-        await page.waitForSelector('.series-card', { timeout: 60000 });
+//         let hasMoreData = true;
 
-        let hasMoreData = true;
+//         while (hasMoreData) {
+//             // Extract data from the current page
+//             const seriesData = await page.evaluate(() => {
+//                 const series = [];
+//                 document.querySelectorAll('.series-card').forEach(card => {
+//                     series.push({
+//                         name: card.querySelector('.series-name').textContent,
+//                         date: card.querySelector('.series-desc span').textContent,
+//                         imageUrl: card.querySelector('img').src
+//                     });
+//                 });
+//                 return series;
+//             });
 
-        while (hasMoreData) {
-            // Extract data from the current page
-            const seriesData = await page.evaluate(() => {
-                const series = [];
-                document.querySelectorAll('.series-card').forEach(card => {
-                    series.push({
-                        name: card.querySelector('.series-name').textContent,
-                        date: card.querySelector('.series-desc span').textContent,
-                        imageUrl: card.querySelector('img').src
-                    });
-                });
-                return series;
-            });
+//             // Insert data into MongoDB
+//             const seriesCollection = db.collection("cricket_series");
+//             const result = await seriesCollection.insertMany(seriesData);
+//             console.log(`${result.insertedCount} documents were inserted`);
 
-            // Insert data into MongoDB
-            const seriesCollection = db.collection("cricket_series");
-            const result = await seriesCollection.insertMany(seriesData);
-            console.log(`${result.insertedCount} documents were inserted`);
+//             // Check if there's a next button and it's not disabled
+//             const nextButtonDisabled = await page.evaluate(() => {
+//                 const nextButton = document.querySelector('.arrow.arrow-right');
+//                 return nextButton ? nextButton.disabled : true;
+//             });
 
-            // Check if there's a next button and it's not disabled
-            const nextButtonDisabled = await page.evaluate(() => {
-                const nextButton = document.querySelector('.arrow.arrow-right');
-                return nextButton ? nextButton.disabled : true;
-            });
+//             if (!nextButtonDisabled) {
+//                 await page.click('.arrow.arrow-right');
+//                 await page.waitForNavigation({ waitUntil: 'networkidle0' });
+//             } else {
+//                 hasMoreData = false;
+//             }
+//         }
 
-            if (!nextButtonDisabled) {
-                await page.click('.arrow.arrow-right');
-                await page.waitForNavigation({ waitUntil: 'networkidle0' });
-            } else {
-                hasMoreData = false;
-            }
-        }
-
-        await browser.close();
-        res.send('Scraping completed successfully');
-    } catch (error) {
-        console.error('Error during scraping:', error);
-        res.status(500).send('An error occurred during scraping');
-    }
-});
+//         await browser.close();
+//         res.send('Scraping completed successfully');
+//     } catch (error) {
+//         console.error('Error during scraping:', error);
+//         res.status(500).send('An error occurred during scraping');
+//     }
+// });
 
 
 
