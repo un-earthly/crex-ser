@@ -8,173 +8,57 @@ const { config } = require('dotenv');
 const NodeCache = require('node-cache');
 const { getCacheKey } = require('./utility');
 const { default: puppeteer } = require('puppeteer');
+const newsRoutes = require('./routes/newsRoutes');
 config()
 app.use(cors())
 app.use(express.json())
+const cache = new NodeCache({ stdTTL: 3600 });
 
 
 let db;
 let browser;
 
-async function initBrowserAndPage() {
-    if (!browser) {
-        try {
-            browser = await puppeteer.launch({
-                args: chromium.args,
-                defaultViewport: chromium.defaultViewport,
-                executablePath: await chromium.executablePath(),
-                headless: chromium.headless,
-                ignoreHTTPSErrors: true,
-            });
-        } catch (error) {
-            console.error('Failed to launch browser:', error);
-            throw new Error('Browser initialization failed');
-        }
-    }
-    return browser.newPage();
-}
-const cache = new NodeCache({ stdTTL: 3600 });
-
-
-// app.post('/api/clickReadMore', async (req, res) => {
-//     try {
-
-//         await initBrowserAndPage();
-
-//         if (!db) {
-//             db = await connectDB(); // Await the connection to ensure `db` is ready
-//             if (!db) {
-//                 throw new Error('Database connection failed');
-//             }
-//         }
-
-//         // Wait for the button to be available
-//         await page.waitForSelector('div.more-button span', { visible: true });
-
-//         // Click the button
-//         await page.evaluate(async () => {
-//             const button = document.querySelector('div.more-button span');
-//             if (button) {
-//                 for (let i = 0; i < 11; i++) {
-//                     button.click();
-//                     await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 1 second between clicks
-//                 }
-//             } else {
-//                 throw new Error('Button not found');
-//             }
-//         });
-
-
-//         // Wait for new content to load
-//         await page.waitForSelector('section.news-topic-wrapper');
-
-//         // Scrape the data
-//         const data = await page.evaluate(() => {
-//             const cards = [];
-//             const cardElements = document.querySelectorAll('section.news-topic-wrapper .card-wrapper');
-
-//             cardElements.forEach(card => {
-//                 const title = card.querySelector('.heading h2').innerText.trim();
-//                 const imageUrl = card.querySelector('.news-card-img img').src;
-//                 const link = card.querySelector('.news-card-img a').href;
-//                 const tags = Array.from(card.querySelectorAll('.news-tag ul li a')).map(tag => tag.innerText.trim());
-//                 const description = card.querySelector('.news-heading p').innerText.trim();
-//                 const time = card.querySelector('.news-time span').innerText.trim();
-
-//                 cards.push({
-//                     title,
-//                     imageUrl,
-//                     link,
-//                     tags,
-//                     description,
-//                     time
-//                 });
+// async function initBrowserAndPage() {
+//     if (!browser) {
+//         try {
+//             browser = await puppeteer.launch({
+//                 args: chromium.args,
+//                 defaultViewport: chromium.defaultViewport,
+//                 executablePath: await chromium.executablePath(),
+//                 headless: chromium.headless,
+//                 ignoreHTTPSErrors: true,
 //             });
-
-//             return cards;
-//         });
-//         // Close the page after scraping
-//         await page.close();
-
-//         const result = await db.collection('news').insertMany(data);
-
-//         res.json({ success: true, result, message: 'Read More button clicked successfully' });
-//     } catch (error) {
-//         console.error('Error:', error);
-//         res.status(500).json({ error: 'An error occurred while clicking the Read More button' });
-//     } finally {
-//         if (page && !page.isClosed()) {
-//             await page.close();
+//         } catch (error) {
+//             console.error('Failed to launch browser:', error);
+//             throw new Error('Browser initialization failed');
 //         }
 //     }
-// });
+//     return await browser.newPage();
+// }
 
 
-
-app.get('/api/news-blogs', async (req, res) => {
-    try {
-
-        await initBrowserAndPage();
-
-
-        // Go to the target URL
-        await page.goto('https://crex.live/', { waitUntil: 'domcontentloaded' });
-
-        // Wait for the necessary elements to load
-        await page.waitForSelector('section.news-topic-wrapper');
-
-        // Scrape the data
-        const data = await page.evaluate(() => {
-            const cards = [];
-            const cardElements = document.querySelectorAll('section.news-topic-wrapper .card-wrapper');
-
-            cardElements.forEach(card => {
-                const title = card.querySelector('.heading h2').innerText.trim();
-                const imageUrl = card.querySelector('.news-card-img img').src;
-                const link = card.querySelector('.news-card-img a').href;
-                const tags = Array.from(card.querySelectorAll('.news-tag ul li a')).map(tag => tag.innerText.trim());
-                const description = card.querySelector('.news-heading p').innerText.trim();
-                const time = card.querySelector('.news-time span').innerText.trim();
-
-                cards.push({
-                    title,
-                    imageUrl,
-                    link,
-                    tags,
-                    description,
-                    time
-                });
-            });
-
-            return cards;
-        });
-
-        // Close the browser
-        await browser.close();
-
-        // Send the scraped data as a response
-        res.json(data);
-    } catch (error) {
-        console.error('Error scraping the data:', error);
-        res.status(500).json({ error: 'Failed to scrape the data' });
-    }
-});
 
 async function matchesScrapper(url) {
-    const cachedData = cache.get(url);
-    if (cachedData) {
-        return cachedData;
+    let matches = cache.get(url);
+
+    if (matches) {
+        console.log('Serving from cache');
+        return matches;
     }
-
-
+    const browser = await puppeteer.launch({
+        args: chromium.args,
+        defaultViewport: chromium.defaultViewport,
+        executablePath: await chromium.executablePath(),
+        headless: chromium.headless,
+        ignoreHTTPSErrors: true,
+    });
+    const page = await browser.newPage();
 
     try {
-        let page = await initBrowserAndPage()
-        await page.setDefaultNavigationTimeout(60000);
-        await page.setRequestInterception(true);
 
-        await page.goto(url, { waitUntil: 'networkidle0' });
-        await page.waitForSelector('.live-card', { timeout: 60000 });
+        await page.goto(url, { waitUntil: 'networkidle2' });
+        await page.waitForSelector('.live-card');
+
         const matches = await page.evaluate(() => {
             const matchCards = document.querySelectorAll('.live-card');
             return Array.from(matchCards).map(card => {
@@ -250,7 +134,7 @@ async function matchesScrapper(url) {
                     status = 'Upcoming';
                 }
 
-                const upcomingTime = card.querySelector('.upcomingTime')?.getAttribute('title');
+                const upcomingTime = card.querySelector('.upcomingTime')?.title;
 
                 const matchDate = card.querySelector('.upcomingTime')?.textContent.trim();
                 const startTimeElement = card.querySelector('.match-data');
@@ -267,13 +151,14 @@ async function matchesScrapper(url) {
                     upcomingTime,
                     matchDate,
                     startTime,
-                    link: card.querySelector('a')?.href.replace('https://crex.live', '') || null
+                    link: card.querySelector('.live-card>a')?.href.replace('https://crex.live', '') || null
 
                 };
             });
         });
 
         cache.set(url, matches);
+
 
         return matches;
     } catch (error) {
@@ -285,10 +170,17 @@ async function matchesScrapper(url) {
 }
 
 async function scrapeRankings(url) {
+    const browser = await puppeteer.launch({
+        args: chromium.args,
+        defaultViewport: chromium.defaultViewport,
+        executablePath: await chromium.executablePath(),
+        headless: chromium.headless,
+        ignoreHTTPSErrors: true,
+    });
+    const page = await browser.newPage();
 
     try {
-        let page = await initBrowserAndPage()
-        await page.goto(url, { waitUntil: 'networkidle0' });
+        await page.goto(url, { waitUntil: 'domcontentloaded' });
 
         await page.waitForSelector('.card_wrapper', { timeout: 10000 });
 
@@ -353,10 +245,17 @@ async function scrapeRankings(url) {
 
 async function scrapeCricketRankings(url) {
 
+    const browser = await puppeteer.launch({
+        args: chromium.args,
+        defaultViewport: chromium.defaultViewport,
+        executablePath: await chromium.executablePath(),
+        headless: chromium.headless,
+        ignoreHTTPSErrors: true,
+    });
+    const page = await browser.newPage();
 
     try {
-        let page = await initBrowserAndPage()
-        await page.goto(url, { waitUntil: 'networkidle0' });
+        await page.goto(url, { waitUntil: 'networkidle2' });
 
         const rankings = await page.evaluate(() => {
             const tabContainers = document.querySelectorAll('.card_wrapper');
@@ -403,8 +302,15 @@ async function scrapeCricketRankings(url) {
 
 async function scrapeNavBarData() {
 
-    let page = await initBrowserAndPage()
-    await page.goto('https://crex.live/', { waitUntil: 'domcontentloaded' });
+    const browser = await puppeteer.launch({
+        args: chromium.args,
+        defaultViewport: chromium.defaultViewport,
+        executablePath: await chromium.executablePath(),
+        headless: chromium.headless,
+        ignoreHTTPSErrors: true,
+    });
+    const page = await browser.newPage();
+    await page.goto('https://crex.live/', { waitUntil: 'networkidle2' });
 
     // Wait for the navigation bar to load
     await page.waitForSelector('#myHeader', { visible: true });
@@ -455,10 +361,17 @@ async function scrapeNavBarData() {
 
 
 async function seriesScrapper(url) {
-    let page = await initBrowserAndPage()
+    const browser = await puppeteer.launch({
+        args: chromium.args,
+        defaultViewport: chromium.defaultViewport,
+        executablePath: await chromium.executablePath(),
+        headless: chromium.headless,
+        ignoreHTTPSErrors: true,
+    });
+    const page = await browser.newPage();
 
     try {
-        await page.goto(url, { waitUntil: 'networkidle0' });
+        await page.goto(url, { waitUntil: 'networkidle2' });
 
         // Wait for the main content to load
         await page.waitForSelector('.overview-wrapper');
@@ -549,9 +462,16 @@ async function seriesScrapper(url) {
 
 
 async function scrapeTeamSquad(url) {
-    let page = await initBrowserAndPage()
+    const browser = await puppeteer.launch({
+        args: chromium.args,
+        defaultViewport: chromium.defaultViewport,
+        executablePath: await chromium.executablePath(),
+        headless: chromium.headless,
+        ignoreHTTPSErrors: true,
+    });
+    const page = await browser.newPage();
 
-    await page.goto(url, { waitUntil: 'networkidle0' });
+    await page.goto(url, { waitUntil: 'networkidle2' });
 
     const squadData = await page.evaluate(() => {
         const teams = [];
@@ -590,10 +510,17 @@ async function scrapeTeamSquad(url) {
 
 
 async function scrapeSeriesInfo(url) {
-    let page = await initBrowserAndPage()
+    const browser = await puppeteer.launch({
+        args: chromium.args,
+        defaultViewport: chromium.defaultViewport,
+        executablePath: await chromium.executablePath(),
+        headless: chromium.headless,
+        ignoreHTTPSErrors: true,
+    });
+    const page = await browser.newPage();
 
     try {
-        await page.goto(url, { waitUntil: 'networkidle0' });
+        await page.goto(url, { waitUntil: 'networkidle2' });
 
         const seriesInfo = await page.evaluate(() => {
             const infoWrapper = document.querySelector('.series-info-wrapper');
@@ -640,11 +567,18 @@ async function scrapeSeriesInfo(url) {
     }
 }
 async function scrapeMatchesInfo(url) {
-    let page = await initBrowserAndPage()
+    const browser = await puppeteer.launch({
+        args: chromium.args,
+        defaultViewport: chromium.defaultViewport,
+        executablePath: await chromium.executablePath(),
+        headless: chromium.headless,
+        ignoreHTTPSErrors: true,
+    });
+    const page = await browser.newPage();
 
 
     try {
-        await page.goto(url, { waitUntil: 'networkidle0' });
+        await page.goto(url, { waitUntil: 'networkidle2' });
 
         const matchesInfo = await page.evaluate(() => {
             const matchesWrapper = document.querySelector('.matches-wrapper');
@@ -699,11 +633,18 @@ async function scrapeMatchesInfo(url) {
 
 
 async function scrapeSeriesStats(url) {
-    let page = await initBrowserAndPage()
+    const browser = await puppeteer.launch({
+        args: chromium.args,
+        defaultViewport: chromium.defaultViewport,
+        executablePath: await chromium.executablePath(),
+        headless: chromium.headless,
+        ignoreHTTPSErrors: true,
+    });
+    const page = await browser.newPage();
 
 
     try {
-        await page.goto(url, { waitUntil: 'networkidle0' });
+        await page.goto(url, { waitUntil: 'networkidle2' });
 
         const seriesStats = await page.evaluate(() => {
             const statsWrapper = document.querySelector('.series-stats-wrapper');
@@ -778,10 +719,16 @@ async function scrapeSeriesStats(url) {
 }
 
 async function scrapePointsTable(url) {
-    let page = await initBrowserAndPage()
-
+    const browser = await puppeteer.launch({
+        args: chromium.args,
+        defaultViewport: chromium.defaultViewport,
+        executablePath: await chromium.executablePath(),
+        headless: chromium.headless,
+        ignoreHTTPSErrors: true,
+    });
+    const page = await browser.newPage();
     try {
-        await page.goto(url, { waitUntil: 'networkidle0' });
+        await page.goto(url, { waitUntil: 'networkidle2' });
 
         const pointsTableInfo = await page.evaluate(() => {
             const tableWrapper = document.querySelector('.points-table-wrapper');
@@ -822,11 +769,18 @@ async function scrapePointsTable(url) {
     }
 }
 async function scrapeSeriesNews(url) {
-    let page = await initBrowserAndPage()
+    const browser = await puppeteer.launch({
+        args: chromium.args,
+        defaultViewport: chromium.defaultViewport,
+        executablePath: await chromium.executablePath(),
+        headless: chromium.headless,
+        ignoreHTTPSErrors: true,
+    });
+    const page = await browser.newPage();
 
 
     try {
-        await page.goto(url, { waitUntil: 'networkidle0' });
+        await page.goto(url, { waitUntil: 'networkidle2' });
 
         const newsWrapper = await page.evaluate(() => {
             const newsContainer = document.querySelector('.news-wrapper');
@@ -867,11 +821,18 @@ async function scrapeSeriesNews(url) {
 }
 
 async function scrapTeamList(url) {
-    let page = await initBrowserAndPage()
+    const browser = await puppeteer.launch({
+        args: chromium.args,
+        defaultViewport: chromium.defaultViewport,
+        executablePath: await chromium.executablePath(),
+        headless: chromium.headless,
+        ignoreHTTPSErrors: true,
+    });
+    const page = await browser.newPage();
 
 
     try {
-        await page.goto(url, { waitUntil: 'networkidle0' });
+        await page.goto(url, { waitUntil: 'networkidle2' });
 
         const teamData = await page.evaluate(() => {
             const teams = [];
@@ -901,7 +862,14 @@ async function scrapTeamList(url) {
     }
 }
 const getMatchDetailsLayout = async (url) => {
-    let page = await initBrowserAndPage()
+    const browser = await puppeteer.launch({
+        args: chromium.args,
+        defaultViewport: chromium.defaultViewport,
+        executablePath: await chromium.executablePath(),
+        headless: chromium.headless,
+        ignoreHTTPSErrors: true,
+    });
+    const page = await browser.newPage();
 
     await page.goto(url, { waitUntil: 'networkidle2' });
 
@@ -936,7 +904,14 @@ const getMatchDetailsLayout = async (url) => {
 
 
 async function scrapeMatchInfoDetails(url) {
-    let page = await initBrowserAndPage()
+    const browser = await puppeteer.launch({
+        args: chromium.args,
+        defaultViewport: chromium.defaultViewport,
+        executablePath: await chromium.executablePath(),
+        headless: chromium.headless,
+        ignoreHTTPSErrors: true,
+    });
+    const page = await browser.newPage();
 
     try {
         await page.goto(url, { waitUntil: 'networkidle2' });
@@ -1155,7 +1130,7 @@ async function scrapeMatchInfoDetails(url) {
             return data;
         });
         const playerData = await page.evaluate(async () => {
-            document.querySelector('.bench-toggle').click()
+            document.querySelector('.bench-toggle')?.click()
             const getPlayerData = (selector) => {
                 const players = [];
                 document.querySelectorAll(selector).forEach(playerElement => {
@@ -1170,7 +1145,7 @@ async function scrapeMatchInfoDetails(url) {
                     }
 
                     players.push({
-                        profile: playerUrl,
+                        profile: playerUrl.replace("https://crex.live", ""),
                         name: playerName,
                         image: imageUrl,
                         role: playerRole,
@@ -1216,13 +1191,76 @@ async function scrapeMatchInfoDetails(url) {
 
 
 async function scrapeScorecardInfo(url) {
-    console.log(url)
+    const browser = await puppeteer.launch({
+        args: chromium.args,
+        defaultViewport: chromium.defaultViewport,
+        executablePath: await chromium.executablePath(),
+        headless: chromium.headless,
+        ignoreHTTPSErrors: true,
+    });
+    const page = await browser.newPage();
     return {}
 }
 
 
+async function scrapePlayerLayoutData(url) {
+    const browser = await puppeteer.launch({ headless: true });
+    const page = await browser.newPage();
+
+    await page.goto(url, { waitUntil: 'networkidle0' });
+    await page.waitForSelector(".playerAge")
+
+    const playerData = await page.evaluate(() => {
+        // Extract the player's name
+        const playerFName = document.querySelector('.playerFName')?.textContent?.trim() || '';
+        const playerLName = document.querySelector('.playerLName')?.textContent?.trim() || '';
+        const playerName = `${playerFName} ${playerLName}`;
+
+        // Extract the team name
+        const teamName = document.querySelector('.bgTeamName')?.textContent?.trim() || '';
+
+        // Extract the age
+        const age = document.querySelector('.playerAge span:last-child')?.textContent?.trim();
+        const teamFlag = document.querySelector('.playerAge img')?.src || '';
+
+        // Extract the role
+        const role = document.querySelector('.btText span')?.textContent?.trim() || '';
+
+        // Extract the player image
+        const playerImg = document.querySelector('.playerProfileDefault img[alt]')?.src || '';
+
+        // Extract the jersey image
+        const jerseyImg = document.querySelector('.playerProfileDefault img.mr-top')?.src || '';
+        const rankings = Array.from(document.querySelectorAll('.playerTop'))
+            .map(el => el.textContent.trim())
+            .filter(text => text);
+        return {
+            playerFName,
+            playerLName,
+            teamName,
+            age,
+            teamFlag,
+            role,
+            playerImg,
+            jerseyImg,
+            rankings
+        };
+    });
+
+    await browser.close();
+
+    return playerData;
+}
+
 async function scrapeLiveMatchInfo(url) {
-    let page = await initBrowserAndPage()
+    const browser = await puppeteer.launch({
+        args: chromium.args,
+        defaultViewport: chromium.defaultViewport,
+        executablePath: await chromium.executablePath(),
+        headless: chromium.headless,
+        ignoreHTTPSErrors: true,
+    });
+    const page = await browser.newPage();
 
 
     try {
@@ -1349,11 +1387,18 @@ async function scrapeLiveMatchInfo(url) {
 }
 
 async function scrapeCommentary(url, limit) {
-    let page = await initBrowserAndPage()
+    const browser = await puppeteer.launch({
+        args: chromium.args,
+        defaultViewport: chromium.defaultViewport,
+        executablePath: await chromium.executablePath(),
+        headless: chromium.headless,
+        ignoreHTTPSErrors: true,
+    });
+    const page = await browser.newPage();
 
 
     try {
-        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+        await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
 
         let commentary = [];
 
@@ -1429,11 +1474,30 @@ async function getTeams(page = 1, pageSize = 10, searchTerm = '') {
     }
 };
 
-async function scrapeAndSaveSeries(url) {
-    let page = await initBrowserAndPage()
+async function scrapeAndSaveSeries(url, pageOffset = 0) {
+    const browser = await puppeteer.launch({
+        args: chromium.args,
+        defaultViewport: chromium.defaultViewport,
+        executablePath: await chromium.executablePath(),
+        headless: chromium.headless,
+        ignoreHTTPSErrors: true,
+    });
+    const page = await browser.newPage();
 
     try {
-        await page.goto(url, { waitUntil: 'networkidle0' });
+        await page.goto(url, { waitUntil: 'networkidle2' });
+
+        if (pageOffset !== 0) {
+            const direction = pageOffset > 0 ? 'next-button' : 'prev-button';
+            const clicks = Math.abs(pageOffset);
+
+            for (let i = 0; i < clicks; i++) {
+                await page.waitForSelector(`.${direction}`);
+                await page.click(`.${direction}`);
+                await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+        }
+
 
         const seriesData = await page.evaluate(() => {
             const series = [];
@@ -1447,7 +1511,7 @@ async function scrapeAndSaveSeries(url) {
                     const name = card.querySelector('.series-name').textContent.trim();
                     const dateRange = card.querySelector('.series-desc span').textContent.trim();
                     const imgSrc = card.querySelector('img').src;
-                    const link = card.href;
+                    const link = card.href?.replace("https://crex.live", "");
 
                     series.push({
                         month,
@@ -1475,15 +1539,24 @@ async function scrapeAndSaveSeries(url) {
         throw error;
     }
 }
-async function scrapeTableData(url, maxRetries = 3) {
+
+async function scrapeStatsData(url, maxRetries = 3) {
+    const browser = await puppeteer.launch({
+        args: chromium.args,
+        defaultViewport: chromium.defaultViewport,
+        executablePath: await chromium.executablePath(),
+        headless: chromium.headless,
+        ignoreHTTPSErrors: true,
+    });
+    const page = await browser.newPage();
     try {
-        let page = await initBrowserAndPage()
+
 
         page.setDefaultNavigationTimeout(60000);
 
         for (let retry = 0; retry < maxRetries; retry++) {
             try {
-                await page.goto(url, { waitUntil: 'networkidle0' });
+                await page.goto(url, { waitUntil: 'networkidle2' });
                 await page.waitForSelector(".stats-header", { timeout: 10000 });
                 await page.waitForSelector('tbody tr', { timeout: 10000 });
 
@@ -1585,58 +1658,80 @@ async function autoScroll(page) {
     });
 }
 
+async function scrapeCricketMatches(pageOffset = 0) {
+    const browser = await puppeteer.launch({
+        args: chromium.args,
+        defaultViewport: chromium.defaultViewport,
+        executablePath: await chromium.executablePath(),
+        headless: chromium.headless,
+        ignoreHTTPSErrors: true,
+    });
+    const page = await browser.newPage();
+    try {
 
 
+        await page.goto(process.env.BASE + '/fixtures/match-list', { waitUntil: 'networkidle2' });
 
-async function scrapeCricketMatches() {
-    let page = await initBrowserAndPage()
-    await page.goto(process.env.BASE + '/fixtures/match-list', { waitUntil: 'networkidle0' });
-    await page.waitForSelector('#date-wise-wrap');
+        if (pageOffset !== 0) {
+            const direction = pageOffset > 0 ? 'next-button' : 'prev-button';
+            const clicks = Math.abs(pageOffset);
 
-    const matchesByDate = await page.evaluate(() => {
-        const dateContainers = document.querySelectorAll('#date-wise-wrap');
-        const result = [];
+            for (let i = 0; i < clicks; i++) {
+                await page.waitForSelector(`.${direction}`);
+                await page.click(`.${direction}`);
+                await new Promise(resolve => setTimeout(resolve, 300));
+            }
+        }
+        await page.waitForSelector('.date-wise-matches-card');
 
-        dateContainers.forEach(dateContainer => {
-            const dateElement = dateContainer.querySelector('.date div');
-            if (!dateElement) return;
+        const matchesByDate = await page.evaluate(() => {
+            const dateSections = document.querySelectorAll('.date-wise-matches-card > div');
+            const result = [];
 
-            const date = dateElement.textContent.trim();
-            const matchElements = dateContainer.querySelectorAll('.match-card-container');
+            dateSections.forEach(section => {
+                const dateElement = section.querySelector('.date div');
+                if (!dateElement) return;
 
-            const matches = Array.from(matchElements).map(element => {
-                const link = element.querySelector('a').href.replace('https://crex.live', '');
-                const teams = element.querySelectorAll('.team-name');
-                const scores = element.querySelectorAll('.team-score');
-                const overs = element.querySelectorAll('.total-overs');
-                const result = element.querySelector('.result span');
-                const matchInfo = element.querySelector('.reason');
-                const startTime = element.querySelector('.not-started');
-                const logos = element.querySelectorAll("img");
-                return {
-                    link,
-                    team1: teams[0]?.textContent.trim(),
-                    team2: teams[1]?.textContent.trim(),
-                    score1: scores[0]?.textContent.trim(),
-                    score2: scores[1]?.textContent.trim(),
-                    logo1: logos[0]?.src,
-                    logo2: logos[1]?.src,
-                    overs1: overs[0]?.textContent.trim(),
-                    overs2: overs[1]?.textContent.trim(),
-                    result: result?.textContent.trim() || 'Upcoming',
-                    matchInfo: matchInfo?.textContent.trim() || startTime?.innerText.split("\n")[2],
-                    startTime: startTime && startTime.innerText.split("\n")[0]
-                };
+                const date = dateElement.textContent.trim();
+                const matchElements = section.querySelectorAll('.match-card-container');
+
+                const matches = Array.from(matchElements).map(element => {
+                    const link = element.querySelector('a').href.replace('https://crex.live', '');
+                    const teams = element.querySelectorAll('.team-name');
+                    const scores = element.querySelectorAll('.team-score');
+                    const overs = element.querySelectorAll('.total-overs');
+                    const result = element.querySelector('.result span');
+                    const matchInfo = element.querySelector('.reason');
+                    const startTime = element.querySelector('.not-started');
+                    const logos = element.querySelectorAll("img");
+                    return {
+                        link,
+                        team1: teams[0]?.textContent.trim(),
+                        team2: teams[1]?.textContent.trim(),
+                        score1: scores[0]?.textContent.trim(),
+                        score2: scores[1]?.textContent.trim(),
+                        logo1: logos[0]?.src,
+                        logo2: logos[1]?.src,
+                        overs1: overs[0]?.textContent.trim(),
+                        overs2: overs[1]?.textContent.trim(),
+                        result: result?.textContent.trim() || 'Upcoming',
+                        matchInfo: matchInfo?.textContent.trim() || startTime?.innerText.split("\n")[2],
+                        startTime: startTime && startTime.innerText.split("\n")[0]
+                    };
+                });
+
+                result.push({ date, matches });
             });
 
-            result.push({ date, matches });
+            return result;
         });
 
-        return result;
-    });
-
-    await browser.close();
-    return matchesByDate;
+        await browser.close();
+        return matchesByDate;
+    } catch (e) {
+        console.error('Error fetching matches:', e);
+        throw e;
+    }
 }
 
 
@@ -1648,7 +1743,7 @@ app.get('/api/fixtures/match-list', async (req, res) => {
             return res.json(cachedData);
         }
 
-        const matches = await scrapeCricketMatches();
+        const matches = await scrapeCricketMatches(req.query.offset);
 
         cache.set('matches', matches);
 
@@ -1706,7 +1801,50 @@ app.get('/api/series/:slug/:subSlug/:subroute', async (req, res) => {
         res.status(500).json({ error: 'Failed to retrieve series data', details: error.message });
     }
 });
+app.get('/api/player-profile/:slug/:subSlug', async (req, res) => {
+    try {
+        const { slug, subSlug } = req.params;
+        const cacheKey = `${slug}_${subSlug}`;
 
+        // Check if the data is in the cache
+        let data = cache.get(cacheKey);
+
+        if (!data) {
+            // If not in the cache, scrape the data
+            data = await scrapePlayerLayoutData(process.env.BASE + '/player-profile/' + slug + "/" + subSlug);
+
+            // Store the result in the cache
+            cache.set(cacheKey, data);
+        }
+
+        res.json({ data });
+    } catch (error) {
+        console.error('Error:', error);
+        res.status(500).json({ error: 'Failed to retrieve series' });
+    }
+});
+app.get('/api/player-profile/:slug/:subSlug', async (req, res) => {
+    try {
+        const { slug, subSlug } = req.params;
+        const cacheKey = `${slug}_${subSlug}`;
+
+        // Check if the data is in the cache
+        let data = cache.get(cacheKey);
+
+        if (!data) {
+            // If not in the cache, scrape the data
+            data = await scrapePlayerLayoutData(process.env.BASE + '/player-profile/' + slug + "/" + subSlug);
+
+            // Store the result in the cache
+            cache.set(cacheKey, data);
+        }
+
+        res.json({ data });
+    } catch (error) {
+        console.error('Error:', error);
+        res.status(500).json({ error: 'Failed to retrieve series' });
+    }
+});
 app.get('/api/rankings/:gen/:cat', async function (req, res) {
     const { gen, cat } = req.params;
     let url = `${process.env.BASE}/rankings/${gen.toLowerCase()}/${cat.toLowerCase()}`;
@@ -1796,16 +1934,31 @@ app.get('/api/team-list', async (req, res) => {
 
 app.get('/api/matches', async (req, res) => {
     try {
-        let data = await matchesScrapper(process.env.BASE)
+        const url = process.env.BASE;
+
+        // First try to get data from the cache
+        let data = cache.get(url);
+
+        if (!data) {
+            // If no cache data, scrape the data
+            data = await matchesScrapper(url);
+        } else {
+            // Refresh cache in the background if data is stale
+            if (cache.getTtl(url) - Date.now() < 0) {
+                matchesScrapper(url).catch(error => console.error('Background refresh failed:', error));
+            }
+        }
+
         res.json(data);
     } catch (error) {
         console.error('Error scraping the data:', error);
         res.status(500).json({ error: 'Failed to scrape the data' });
     }
 });
+
 app.get('/api/scrape-series-list', async (req, res) => {
     try {
-        const data = await scrapeAndSaveSeries(process.env.BASE + '/fixtures/series-list')
+        const data = await scrapeAndSaveSeries(process.env.BASE + '/fixtures/series-list', req.query.offset)
         res.json(data);
     } catch (error) {
         console.error('Error scraping navbar data:', error);
@@ -1918,7 +2071,7 @@ app.get('/api/stats-corner', async function (req, res) {
         ];
 
         const randomUrl = urlList[Math.floor(Math.random() * urlList.length)];
-        const data = await scrapeTableData(randomUrl);
+        const data = await scrapeStatsData(randomUrl);
         res.json(data);
     } catch (error) {
         console.error('Error:', error);
@@ -1926,112 +2079,85 @@ app.get('/api/stats-corner', async function (req, res) {
     }
 });
 
-app.get('/api/get-suffle-list', async function (req, res) {
-    const baseUrl = 'https://crex.live/stats/most-runs-in-asia-cup-2022?m=0&sid=1&sn=11J&vn=6U&tm=T&fmt=2&isT=6&yr=2022';
-    const numberOfClicks = 100;
+app.get('/api/news-blogs', async (req, res) => {
+    const { clicks } = req.query;
 
-    let page = await initBrowserAndPage()
+    try {
+        const browser = await puppeteer.launch({
+            args: chromium.args,
+            defaultViewport: chromium.defaultViewport,
+            executablePath: await chromium.executablePath(),
+            headless: chromium.headless,
+            ignoreHTTPSErrors: true,
+        });
+        const page = await browser.newPage();
 
+        // Go to the target URL
+        await page.goto('https://crex.live/', { waitUntil: 'networkidle2' });
 
-    await page.goto(baseUrl, { waitUntil: 'networkidle0' });
+        // Wait for the necessary elements to load
+        await page.waitForSelector('section.news-topic-wrapper');
 
-    const urls = [baseUrl];
+        if (clicks) {
+            const clickCount = parseInt(clicks);
 
-    for (let i = 1; i < numberOfClicks; i++) {
-        try {
-            await page.waitForSelector('body', { timeout: 5000 });
+            for (let i = 0; i < clickCount; i++) {
+                await page.waitForSelector('.more-button', { visible: true, timeout: 5000 }).catch(() => {
+                    console.log('Read More button not found. All content may have been loaded.');
+                    return;
+                });
 
-            await page.evaluate(() => {
-                if (typeof shuffleData === 'function') {
-                    shuffleData();
-                } else {
-                    console.error('shuffleData function not found');
-                }
+                await page.evaluate(() => {
+                    const button = document.querySelector('.more-button');
+                    if (button) button.click();
+                });
+
+                console.log(`Clicked ${i + 1} times`);
+
+                // Wait for 500ms after each click
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+        }
+
+        // Scrape the data
+        const data = await page.evaluate(() => {
+            const cards = [];
+            const cardElements = document.querySelectorAll('section.news-topic-wrapper .card-wrapper');
+
+            cardElements.forEach(card => {
+                const title = card.querySelector('.heading h2').innerText.trim();
+                const imageUrl = card.querySelector('.news-card-img img').src;
+                const link = card.querySelector('.news-card-img a').href;
+                const tags = Array.from(card.querySelectorAll('.news-tag ul li a')).map(tag => tag.innerText.trim());
+                const description = card.querySelector('.news-heading p').innerText.trim();
+                const time = card.querySelector('.news-time span').innerText.trim();
+
+                cards.push({
+                    title,
+                    imageUrl,
+                    link,
+                    tags,
+                    description,
+                    time
+                });
             });
 
-            // Wait for the URL to change
-            await page.waitForFunction(
-                (oldUrl) => window.location.href !== oldUrl,
-                { timeout: 5000 },
-                page.url()
-            );
+            return cards;
+        });
 
-            // Get the current URL after shuffling
-            const currentUrl = await page.url();
-            urls.push(currentUrl);
+        // Close the browser
+        await browser.close();
 
-            console.log(`Collected URL ${i + 1}: ${currentUrl}`);
-
-            // Add a small delay to avoid overwhelming the server
-            await page.waitForTimeout(1000);
-        } catch (error) {
-            console.error(`Error on iteration ${i + 1}:`, error.message);
-        }
+        // Send the scraped data as a response
+        res.json(data);
+    } catch (error) {
+        console.error('Error scraping the data:', error);
+        res.status(500).json({ error: 'Failed to scrape the data' });
     }
-
-    await browser.close();
-
-    return urls;
 });
 
 
-// app.get('/api/series-list', async (req, res) => {
-//     try {
-
-//         if (!db) {
-//             db = await connectDB();
-//             if (!db) {
-//                 throw new Error('Database connection failed');
-//             }
-//         }
-//         initBrowserAndPage()
-//         await page.goto(process.env.BASE + '/fixtures/series-list');
-//         await page.waitForSelector('.series-card', { timeout: 60000 });
-
-//         let hasMoreData = true;
-
-//         while (hasMoreData) {
-//             // Extract data from the current page
-//             const seriesData = await page.evaluate(() => {
-//                 const series = [];
-//                 document.querySelectorAll('.series-card').forEach(card => {
-//                     series.push({
-//                         name: card.querySelector('.series-name').textContent,
-//                         date: card.querySelector('.series-desc span').textContent,
-//                         imageUrl: card.querySelector('img').src
-//                     });
-//                 });
-//                 return series;
-//             });
-
-//             // Insert data into MongoDB
-//             const seriesCollection = db.collection("cricket_series");
-//             const result = await seriesCollection.insertMany(seriesData);
-//             console.log(`${result.insertedCount} documents were inserted`);
-
-//             // Check if there's a next button and it's not disabled
-//             const nextButtonDisabled = await page.evaluate(() => {
-//                 const nextButton = document.querySelector('.arrow.arrow-right');
-//                 return nextButton ? nextButton.disabled : true;
-//             });
-
-//             if (!nextButtonDisabled) {
-//                 await page.click('.arrow.arrow-right');
-//                 await page.waitForNavigation({ waitUntil: 'networkidle0' });
-//             } else {
-//                 hasMoreData = false;
-//             }
-//         }
-
-//         await browser.close();
-//         res.send('Scraping completed successfully');
-//     } catch (error) {
-//         console.error('Error during scraping:', error);
-//         res.status(500).send('An error occurred during scraping');
-//     }
-// });
-
-
+// app.use('/api', newsRoutes);
 
 // Ensure to close the browser when the application is terminated
 process.on('exit', async () => {
