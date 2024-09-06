@@ -1,5 +1,5 @@
 const chromium = require("@sparticuz/chromium");
-const { default: puppeteer } = require("puppeteer");
+const puppeteer = require("puppeteer-core");
 
 async function scrapeShuffledStatsData(url, maxRetries = 3) {
     const browser = await puppeteer.launch({

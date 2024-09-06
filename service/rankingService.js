@@ -1,4 +1,4 @@
-const { default: puppeteer } = require("puppeteer");
+const puppeteer = require("puppeteer-core");
 const chromium = require("@sparticuz/chromium");
 
 async function scrapeRankings(url) {

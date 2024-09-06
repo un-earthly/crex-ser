@@ -1,5 +1,5 @@
 const chromium = require("@sparticuz/chromium");
-const { default: puppeteer } = require("puppeteer");
+const puppeteer = require("puppeteer-core");
 const connectDB = require("../db.config");
 
 async function scrapeFixtureMatches(pageOffset = 0) {
