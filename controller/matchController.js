@@ -63,6 +63,7 @@ async function scrapeCommentaryController(req, res) {
 }
 
 async function scrapeAllMatches(req, res) {
+    console.log("api hit")
     try {
         const url = process.env.BASE;
 

@@ -2,17 +2,19 @@ const { default: puppeteer } = require("puppeteer");
 const chromium = require("@sparticuz/chromium");
 
 async function scrapeRankings(url) {
-    const browser = await puppeteer.launch({
-        args: chromium.args,
-        defaultViewport: chromium.defaultViewport,
-        executablePath: await chromium.executablePath(),
-        headless: chromium.headless,
-        ignoreHTTPSErrors: true,
-    });
-    const page = await browser.newPage();
+    let browser = null;
 
     try {
-        await page.goto(url, { waitUntil: 'domcontentloaded' });
+        const browser = await puppeteer.launch({
+            args: chromium.args,
+            defaultViewport: chromium.defaultViewport,
+            executablePath: await chromium.executablePath(),
+            headless: false,
+            ignoreHTTPSErrors: true,
+        });
+        const page = await browser.newPage();
+
+        await page.goto(url, { waitUntil: 'networkidle2' });
 
         await page.waitForSelector('.card_wrapper', { timeout: 10000 });
 
@@ -71,7 +73,9 @@ async function scrapeRankings(url) {
     } catch (error) {
         throw error;
     } finally {
-        await browser.close();
+        if (browser) {
+            await browser.close();
+        }
     }
 }
 

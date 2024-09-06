@@ -378,8 +378,6 @@ async function scrapeMatchInfoDetails(url) {
         await browser.close();
     }
 };
-
-
 async function scrapeScorecardInfo(url) {
     const browser = await puppeteer.launch({
         args: chromium.args,
@@ -389,8 +387,136 @@ async function scrapeScorecardInfo(url) {
         ignoreHTTPSErrors: true,
     });
     const page = await browser.newPage();
-    return {}
+    await page.goto(url, { waitUntil: 'networkidle2' });
+    await page.waitForSelector('.team-tab');
+    await page.waitForSelector("img");
+    await page.waitForSelector(".p-section-wrapper");
+    await page.waitForSelector(".bowler-table");
+
+    // Get all team tabs and determine the active one
+    const tabs = await page.$$('.team-tab');
+
+    // Find the index of the currently active tab
+    const activeTabIndex = await page.evaluate(() => {
+        const tabs = Array.from(document.querySelectorAll(".team-tab"));
+        return tabs.findIndex(tab => tab.classList.contains('bgColor'));
+    });
+
+    // Function to scrape data for the currently active tab
+    async function scrapeTabData() {
+        return page.evaluate(() => {
+            const tabs = Array.from(document.querySelectorAll(".team-tab"));
+            const activeTabData = tabs.map(tab => ({
+                text: tab.innerText.trim(),
+                isActive: tab.classList.contains('bgColor'),
+                img: tab.querySelector("img")?.src
+            }));
+
+            const partnership = Array.from(document.querySelectorAll(".p-section-wrapper"));
+            const partnerShipRows = partnership.map((row) => {
+                return {
+                    wicket: row.querySelector('.p-wckt-info')?.textContent.trim(),
+                    batsman1: {
+                        name: row.querySelector('.p-data:first-of-type a p')?.textContent.trim(),
+                        runs: row.querySelector('.p-data:first-of-type p:last-child')?.textContent.split('(')[0].trim(),
+                        balls: row.querySelector('.p-data:first-of-type .run-highlight')?.textContent.replace(/[()]/g, '').trim()
+                    },
+                    partnershipRuns: row.querySelector('.p-data:nth-of-type(2) .p-runs')?.textContent.split('(')[0].trim(),
+                    partnershipBalls: row.querySelector('.p-data:nth-of-type(2) .p-runs span')?.textContent.replace(/[()]/g, '').trim(),
+                    batsman2: {
+                        name: row.querySelector('.p-data:last-of-type a p')?.textContent.trim(),
+                        runs: row.querySelector('.p-data:last-of-type p:last-child')?.textContent.split('(')[0].trim(),
+                        balls: row.querySelector('.p-data:last-of-type .run-highlight')?.textContent.replace(/[()]/g, '').trim()
+                    }
+                };
+            });
+
+            const sections = Array.from(document.querySelectorAll('.table-heading'));
+            const sectionsData = sections.map(section => {
+                const title = section.querySelector('h3')?.textContent.trim();
+                let data = [];
+                if (title === "Batting") {
+                    const contentSibling = section.nextElementSibling;
+                    data = Array.from(contentSibling.querySelectorAll('tbody tr')).map(row => ({
+                        batter: row.querySelector('.player-name')?.textContent.trim(),
+                        dismissal: row.querySelector('.dismissal-info')?.textContent.trim(),
+                        runs: row.querySelector('td:nth-child(2) .run-highlight')?.textContent.trim(),
+                        balls: row.querySelector('td:nth-child(3)')?.textContent.trim(),
+                        fours: row.querySelector('td:nth-child(4)')?.textContent.trim(),
+                        sixes: row.querySelector('td:nth-child(5)')?.textContent.trim(),
+                        strikeRate: row.querySelector('td:nth-child(6)')?.textContent.trim(),
+                    }));
+                    const extrasElement = contentSibling.querySelector('.extras-text');
+                    if (extrasElement) {
+                        const extrasText = extrasElement.textContent.trim();
+                        data.push({ extras: extrasText });
+                    }
+                } else if (title === "BOWLING") {
+                    const contentSibling = section.nextElementSibling;
+                    data = Array.from(contentSibling.querySelectorAll('.bowler-table tbody tr')).map(row => ({
+                        bowler: row.querySelector('.player-name')?.textContent.trim(),
+                        overs: row.querySelector('td:nth-child(2)')?.textContent.trim(),
+                        maidens: row.querySelector('td:nth-child(3)')?.textContent.trim(),
+                        runsConceded: row.querySelector('td:nth-child(4)')?.textContent.trim(),
+                        wickets: row.querySelector('td:nth-child(5)')?.textContent.trim(),
+                        economy: row.querySelector('td:nth-child(6)')?.textContent.trim()
+                    }));
+                } else if (title === "FALL OF WICKETS") {
+                    data = Array.from(section.querySelectorAll('tbody tr')).map(row => {
+                        return {
+                            batsman: row.querySelector('.player-name')?.textContent.trim(),
+                            score: row.querySelector('.run-highlight')?.textContent.trim(),
+                            overs: row.querySelector('td:last-child div')?.textContent.trim()
+                        };
+                    });
+                } else {
+                    return;
+                }
+
+                return {
+                    title: title,
+                    data
+                };
+            });
+
+            return {
+                activeTabData,
+                partnerShipRows,
+                sectionsData
+            };
+        });
+    }
+
+    // Store data for all tabs
+    const allTabsData = [];
+
+    // Scrape data for the currently active tab first
+    const activeTabData = await scrapeTabData();
+    allTabsData.push({
+        tabIndex: activeTabIndex,
+        tabName: await tabs[activeTabIndex].evaluate(tab => tab.innerText.trim()),
+        data: activeTabData
+    });
+
+    // Now scrape data for the other tabs
+    for (let i = 0; i < tabs.length; i++) {
+        if (i !== activeTabIndex) {
+            await tabs[i].click();  // Switch to the tab
+            await Promise.resolve(r => r, 1000)
+
+            const tabData = await scrapeTabData();
+            allTabsData.push({
+                tabIndex: i,
+                tabName: await tabs[i].evaluate(tab => tab.innerText.trim()),
+                data: tabData
+            });
+        }
+    }
+
+    await browser.close();
+    return allTabsData;
 }
+
 
 async function scrapeLiveMatchInfo(url) {
     const browser = await puppeteer.launch({
@@ -540,7 +666,7 @@ async function getAllMatchService(url) {
 
         await page.goto(url, { waitUntil: 'networkidle2' });
         await page.waitForSelector('.live-card');
-
+        await page.waitForSelector("img")
         const matches = await page.evaluate(() => {
             const matchCards = document.querySelectorAll('.live-card');
             return Array.from(matchCards).map(card => {
@@ -597,6 +723,7 @@ async function getAllMatchService(url) {
                         name,
                         score: score,
                         overs: overs,
+                        logo: teamElement.querySelector("img")?.src
                     };
                 };
 

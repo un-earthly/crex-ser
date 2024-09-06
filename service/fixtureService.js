@@ -1,3 +1,7 @@
+const chromium = require("@sparticuz/chromium");
+const { default: puppeteer } = require("puppeteer");
+const connectDB = require("../db.config");
+
 async function scrapeFixtureMatches(pageOffset = 0) {
     const browser = await puppeteer.launch({
         args: chromium.args,
@@ -75,6 +79,7 @@ async function scrapeFixtureMatches(pageOffset = 0) {
 }
 async function getTeams(page = 1, pageSize = 10, searchTerm = '') {
     try {
+        let db;
         if (!db) {
             db = await connectDB();
             if (!db) {
@@ -94,11 +99,8 @@ async function getTeams(page = 1, pageSize = 10, searchTerm = '') {
             limit: pageSize,
             sort: { name: 1 } // Sort by name ascending
         };
-
-        // Retrieve teams from the database with the specified query, pagination, and sorting
         const teams = await teamsCollection.find(query, options).toArray();
 
-        // Calculate total number of documents for pagination
         const totalTeams = await teamsCollection.countDocuments(query);
 
         return { teams, totalTeams };
@@ -108,8 +110,74 @@ async function getTeams(page = 1, pageSize = 10, searchTerm = '') {
         throw error;
     }
 };
+async function scrapeAndSaveSeries(url, pageOffset = 0) {
+    const browser = await puppeteer.launch({
+        args: chromium.args,
+        defaultViewport: chromium.defaultViewport,
+        executablePath: await chromium.executablePath(),
+        headless: chromium.headless,
+        ignoreHTTPSErrors: true,
+    });
+    const page = await browser.newPage();
+
+    try {
+        await page.goto(url, { waitUntil: 'networkidle2' });
+
+        if (pageOffset !== 0) {
+            const direction = pageOffset > 0 ? 'next-button' : 'prev-button';
+            const clicks = Math.abs(pageOffset);
+
+            for (let i = 0; i < clicks; i++) {
+                await page.waitForSelector(`.${direction}`);
+                await page.click(`.${direction}`);
+                await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+        }
+
+
+        const seriesData = await page.evaluate(() => {
+            const series = [];
+            const monthDivs = document.querySelectorAll('.serieswise');
+
+            monthDivs.forEach((monthDiv) => {
+                const month = monthDiv.querySelector('.s_date span').textContent.trim();
+                const seriesCards = monthDiv.querySelectorAll('.series-card');
+
+                seriesCards.forEach((card) => {
+                    const name = card.querySelector('.series-name').textContent.trim();
+                    const dateRange = card.querySelector('.series-desc span').textContent.trim();
+                    const imgSrc = card.querySelector('img').src;
+                    const link = card.href?.replace("https://crex.live", "");
+
+                    series.push({
+                        month,
+                        name,
+                        dateRange,
+                        imgSrc,
+                        link
+                    });
+                });
+            });
+
+            return series;
+        });
+
+        await browser.close();
+
+
+        return {
+            seriesData,
+            message: `${seriesData.length} series were successfully scraped.`
+        };
+
+    } catch (error) {
+        console.error('Error during scraping or database operation:', error);
+        throw error;
+    }
+}
 
 module.exports = {
     scrapeFixtureMatches,
-    getTeams
+    getTeams,
+    scrapeAndSaveSeries
 }
