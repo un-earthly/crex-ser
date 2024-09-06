@@ -9,7 +9,7 @@ async function scrapeRankings(url) {
             args: chromium.args,
             defaultViewport: chromium.defaultViewport,
             executablePath: await chromium.executablePath(),
-            headless: false,
+            headless: chromium.headless,
             ignoreHTTPSErrors: true,
         });
         const page = await browser.newPage();
