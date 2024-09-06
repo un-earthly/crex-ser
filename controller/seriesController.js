@@ -1,20 +1,14 @@
-const NodeCache = require('node-cache');
+
 const { seriesScrapper, scrapeSeriesInfo, scrapeSeriesNews, scrapeSeriesStats, scrapePointsTable, scrapeTeamSquad, scrapeMatchesInfo } = require('../service/seriesDetails');
-const { getCacheKey } = require('../utility');
-const cache = new NodeCache({ stdTTL: 3600 });
+
+
 async function scrapeSeriesOverview(req, res) {
     try {
         const { slug, subSlug } = req.params;
-        const cacheKey = `${slug}_${subSlug}`;
 
-        let data = cache.get(cacheKey);
+        const data = await seriesScrapper(process.env.BASE + '/series/' + slug + "/" + subSlug);
 
-        if (!data) {
-            data = await seriesScrapper(process.env.BASE + '/series/' + slug + "/" + subSlug);
-
-            cache.set(cacheKey, data);
-        }
-
+      
         res.json({ data });
     } catch (error) {
         console.error('Error:', error);
@@ -28,14 +22,7 @@ async function scrapeSeriesSubRoute(req, res) {
     }
     try {
         const { slug, subSlug, subroute } = req.params;
-        const cacheKey = getCacheKey(slug, subSlug, subroute);
-
-        const cachedData = cache.get(cacheKey);
-        if (cachedData) {
-            console.log('Returning cached data for', cacheKey);
-            return res.json({ data: cachedData });
-        }
-
+      
         let data;
         const baseUrl = `${process.env.BASE}/series/${slug}/${subSlug}/${subroute}`;
 
@@ -61,8 +48,6 @@ async function scrapeSeriesSubRoute(req, res) {
             default:
                 return res.status(404).json({ error: 'Invalid subroute' });
         }
-
-        cache.set(cacheKey, data);
 
         res.json({ data });
     } catch (error) {

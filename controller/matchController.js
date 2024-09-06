@@ -1,7 +1,12 @@
+const {
+    scrapeCommentary,
+    getMatchDetailsLayout,
+    getAllMatchService,
+    scrapeMatchInfoDetails,
+    scrapeLiveMatchInfo,
+    scrapeScorecardInfo
+} = require("../service/matchService");
 
-const { scrapeCommentary, getMatchDetailsLayout, getAllMatchService, scrapeMatchInfoDetails, scrapeLiveMatchInfo, scrapeScorecardInfo } = require("../service/matchService");
-const NodeCache = require('node-cache');
-const cache = new NodeCache({ stdTTL: 3600 });
 async function scrapeMatchInfoController(req, res) {
     const { param1, param2, param3, param4, param5, param6, sub } = req.params;
 
@@ -33,16 +38,9 @@ async function scrapeMatchInfoController(req, res) {
 async function scraperMatchLayout(req, res) {
     const { param1, param2, param3, param4, param5, param6 } = req.params;
 
-    const cacheKey = `${param1}-${param2}-${param3}-${param4}-${param5}-${param6}}`;
-
     try {
-        let data = cache.get(cacheKey);
-
-        if (data == undefined) {
-            const url = `${process.env.BASE}/scoreboard/${param1}/${param2}/${param3}/${param4}/${param5}/${param6}`;
-            data = await getMatchDetailsLayout(url);
-            cache.set(cacheKey, data);
-        }
+        const url = `${process.env.BASE}/scoreboard/${param1}/${param2}/${param3}/${param4}/${param5}/${param6}`;
+        const data = await getMatchDetailsLayout(url);
 
         res.json(data);
     } catch (error) {
@@ -67,15 +65,8 @@ async function scrapeAllMatches(req, res) {
     try {
         const url = process.env.BASE;
 
-        let data = cache.get(url);
+        const data = await getAllMatchService(url);
 
-        if (!data) {
-            data = await getAllMatchService(url);
-        } else {
-            if (cache.getTtl(url) - Date.now() < 0) {
-                matchesScrapper(url).catch(error => console.error('Background refresh failed:', error));
-            }
-        }
 
         res.json(data);
     } catch (error) {
