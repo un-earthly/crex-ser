@@ -531,7 +531,7 @@ async function scrapeLiveMatchInfo(url) {
 
     try {
         // Navigate to the webpage
-        await page.goto(url, { waitUntil: 'domcontentloaded' });
+        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
         await page.waitForSelector('.overs-slide');
 
         // Scrape player data
