@@ -12,6 +12,9 @@ async function scrapeShuffledStatsData(url, maxRetries = 3) {
     const page = await browser.newPage();
     try {
 
+
+        // page.setDefaultNavigationTimeout(60000);
+
         for (let retry = 0; retry < maxRetries; retry++) {
             try {
                 await page.goto(url, { waitUntil: 'networkidle2' });
@@ -86,7 +89,7 @@ async function scrapeShuffledStatsData(url, maxRetries = 3) {
             } catch (error) {
                 console.error(`Attempt ${retry + 1} failed:`, error);
                 if (retry === maxRetries - 1) throw error;
-                await new Promise(resolve => setTimeout(resolve, 5000));
+                await new Promise(resolve => setTimeout(resolve, 5000));  
             }
         }
     } catch (error) {

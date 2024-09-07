@@ -466,4 +466,4 @@ module.exports = {
     scrapeTeamSquad,
     scrapeSeriesNews
 
-}
+ }

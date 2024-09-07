@@ -39,7 +39,7 @@ const scrapeNewsBlogs = async (clicks = 0) => {
             cardElements.forEach(card => {
                 const title = card.querySelector('.heading h2').innerText.trim();
                 const imageUrl = card.querySelector('.news-card-img img').src;
-                const link = card.querySelector('.news-card-img a').href?.replace('https://cricket.one', "");
+                const link = card.querySelector('.news-card-img a').href?.replace('https://cricket.one',"");
                 const tags = Array.from(card.querySelectorAll('.news-tag ul li a')).map(tag => tag.innerText.trim());
                 const description = card.querySelector('.news-heading p').innerText.trim();
                 const time = card.querySelector('.news-time span').innerText.trim();
@@ -77,8 +77,8 @@ const scrapeBlogDetails = async (blogUrl) => {
 
         await page.goto(blogUrl, { waitUntil: 'networkidle2' });
 
-        await page.waitForSelector('.blog-details-container');
-
+        await page.waitForSelector('.blog-details-container'); 
+        
         const blogDetails = await page.evaluate(() => {
             const title = document.querySelector('.blog-title').innerText.trim();
             const author = document.querySelector('.author-name').innerText.trim();
@@ -106,4 +106,4 @@ const scrapeBlogDetails = async (blogUrl) => {
 module.exports = {
     scrapeNewsBlogs,
     scrapeBlogDetails
-};
+ };
