@@ -3,7 +3,10 @@ const puppeteer = require("puppeteer-core");
 
 async function scrapeShuffledStatsData(url, maxRetries = 3) {
     const browser = await puppeteer.launch({
-        args: chromium.args,
+        args: [
+            '--window-size=1920,1080',
+            ...chromium.args
+        ],
         defaultViewport: chromium.defaultViewport,
         executablePath: await chromium.executablePath(),
         headless: chromium.headless,
@@ -11,9 +14,6 @@ async function scrapeShuffledStatsData(url, maxRetries = 3) {
     });
     const page = await browser.newPage();
     try {
-
-
-        // page.setDefaultNavigationTimeout(60000);
 
         for (let retry = 0; retry < maxRetries; retry++) {
             try {
@@ -89,7 +89,7 @@ async function scrapeShuffledStatsData(url, maxRetries = 3) {
             } catch (error) {
                 console.error(`Attempt ${retry + 1} failed:`, error);
                 if (retry === maxRetries - 1) throw error;
-                await new Promise(resolve => setTimeout(resolve, 5000));  
+                await new Promise(resolve => setTimeout(resolve, 5000));
             }
         }
     } catch (error) {

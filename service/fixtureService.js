@@ -4,7 +4,10 @@ const connectDB = require("../db.config");
 
 async function scrapeFixtureMatches(pageOffset = 0) {
     const browser = await puppeteer.launch({
-        args: chromium.args,
+        args: [
+            '--window-size=1920,1080',
+            ...chromium.args
+        ],
         defaultViewport: chromium.defaultViewport,
         executablePath: await chromium.executablePath(),
         headless: chromium.headless,
@@ -112,7 +115,10 @@ async function getTeams(page = 1, pageSize = 10, searchTerm = '') {
 };
 async function scrapeAndSaveSeries(url, pageOffset = 0) {
     const browser = await puppeteer.launch({
-        args: chromium.args,
+        args: [
+            '--window-size=1920,1080',
+            ...chromium.args
+        ],
         defaultViewport: chromium.defaultViewport,
         executablePath: await chromium.executablePath(),
         headless: chromium.headless,

@@ -5,7 +5,10 @@ async function scrapeNavBarData() {
 
     try {
         const browser = await puppeteer.launch({
-            args: chromium.args,
+            args: [
+                '--window-size=1920,1080',
+                ...chromium.args
+            ],
             defaultViewport: chromium.defaultViewport,
             executablePath: await chromium.executablePath(),
             headless: chromium.headless,
