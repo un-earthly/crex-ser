@@ -3,10 +3,7 @@ const puppeteer = require("puppeteer-core");
 
 async function scrapeCommentary(url, limit) {
     const browser = await puppeteer.launch({
-        args: [
-            '--window-size=1920,1080',
-            ...chromium.args
-        ],
+        args: chromium.args,
         defaultViewport: chromium.defaultViewport,
         executablePath: await chromium.executablePath(),
         headless: chromium.headless,
@@ -58,10 +55,7 @@ async function scrapeCommentary(url, limit) {
 }
 const getMatchDetailsLayout = async (url) => {
     const browser = await puppeteer.launch({
-        args: [
-            '--window-size=1920,1080',
-            ...chromium.args
-        ],
+        args: chromium.args,
         defaultViewport: chromium.defaultViewport,
         executablePath: await chromium.executablePath(),
         headless: chromium.headless,
@@ -101,10 +95,7 @@ const getMatchDetailsLayout = async (url) => {
 };
 async function scrapeMatchInfoDetails(url) {
     const browser = await puppeteer.launch({
-        args: [
-            '--window-size=1920,1080',
-            ...chromium.args
-        ],
+        args: chromium.args,
         defaultViewport: chromium.defaultViewport,
         executablePath: await chromium.executablePath(),
         headless: chromium.headless,
@@ -389,10 +380,7 @@ async function scrapeMatchInfoDetails(url) {
 };
 async function scrapeScorecardInfo(url) {
     const browser = await puppeteer.launch({
-        args: [
-            '--window-size=1920,1080',
-            ...chromium.args
-        ],
+        args: chromium.args,
         defaultViewport: chromium.defaultViewport,
         executablePath: await chromium.executablePath(),
         headless: chromium.headless,
@@ -532,10 +520,7 @@ async function scrapeScorecardInfo(url) {
 
 async function scrapeLiveMatchInfo(url) {
     const browser = await puppeteer.launch({
-        args: [
-            '--window-size=1920,1080',
-            ...chromium.args
-        ],
+        args: chromium.args,
         defaultViewport: chromium.defaultViewport,
         executablePath: await chromium.executablePath(),
         headless: chromium.headless,
@@ -669,10 +654,7 @@ async function scrapeLiveMatchInfo(url) {
 
 async function getAllMatchService(url) {
     const browser = await puppeteer.launch({
-        args: [
-            '--window-size=1920,1080',
-            ...chromium.args
-        ],
+        args: chromium.args,
         defaultViewport: chromium.defaultViewport,
         executablePath: await chromium.executablePath(),
         headless: chromium.headless,

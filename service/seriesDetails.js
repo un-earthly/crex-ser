@@ -3,10 +3,7 @@ const puppeteer = require("puppeteer-core");
 
 async function seriesScrapper(url) {
     const browser = await puppeteer.launch({
-        args: [
-            '--window-size=1920,1080',
-            ...chromium.args
-        ],
+        args: chromium.args,
         defaultViewport: chromium.defaultViewport,
         executablePath: await chromium.executablePath(),
         headless: chromium.headless,
@@ -104,10 +101,7 @@ async function seriesScrapper(url) {
 }
 async function scrapeTeamSquad(url) {
     const browser = await puppeteer.launch({
-        args: [
-            '--window-size=1920,1080',
-            ...chromium.args
-        ],
+        args: chromium.args,
         defaultViewport: chromium.defaultViewport,
         executablePath: await chromium.executablePath(),
         headless: chromium.headless,
@@ -154,10 +148,7 @@ async function scrapeTeamSquad(url) {
 
 async function scrapeSeriesInfo(url) {
     const browser = await puppeteer.launch({
-        args: [
-            '--window-size=1920,1080',
-            ...chromium.args
-        ],
+        args: chromium.args,
         defaultViewport: chromium.defaultViewport,
         executablePath: await chromium.executablePath(),
         headless: chromium.headless,
@@ -214,10 +205,7 @@ async function scrapeSeriesInfo(url) {
 }
 async function scrapeMatchesInfo(url) {
     const browser = await puppeteer.launch({
-        args: [
-            '--window-size=1920,1080',
-            ...chromium.args
-        ],
+        args: chromium.args,
         defaultViewport: chromium.defaultViewport,
         executablePath: await chromium.executablePath(),
         headless: chromium.headless,
@@ -281,10 +269,7 @@ async function scrapeMatchesInfo(url) {
 
 async function scrapeSeriesStats(url) {
     const browser = await puppeteer.launch({
-        args: [
-            '--window-size=1920,1080',
-            ...chromium.args
-        ],
+        args: chromium.args,
         defaultViewport: chromium.defaultViewport,
         executablePath: await chromium.executablePath(),
         headless: chromium.headless,
@@ -370,10 +355,7 @@ async function scrapeSeriesStats(url) {
 
 async function scrapePointsTable(url) {
     const browser = await puppeteer.launch({
-        args: [
-            '--window-size=1920,1080',
-            ...chromium.args
-        ],
+        args: chromium.args,
         defaultViewport: chromium.defaultViewport,
         executablePath: await chromium.executablePath(),
         headless: chromium.headless,
@@ -423,10 +405,7 @@ async function scrapePointsTable(url) {
 }
 async function scrapeSeriesNews(url) {
     const browser = await puppeteer.launch({
-        args: [
-            '--window-size=1920,1080',
-            ...chromium.args
-        ],
+        args: chromium.args,
         defaultViewport: chromium.defaultViewport,
         executablePath: await chromium.executablePath(),
         headless: chromium.headless,
@@ -487,4 +466,4 @@ module.exports = {
     scrapeTeamSquad,
     scrapeSeriesNews
 
- }
+}

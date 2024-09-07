@@ -6,10 +6,7 @@ async function scrapeRankings(url) {
 
     try {
         const browser = await puppeteer.launch({
-            args: [
-                '--window-size=1920,1080',
-                ...chromium.args
-            ],
+            args: chromium.args,
             defaultViewport: chromium.defaultViewport,
             executablePath: await chromium.executablePath(),
             headless: chromium.headless,
@@ -85,10 +82,7 @@ async function scrapeRankings(url) {
 async function scrapeCricketRankings(url) {
 
     const browser = await puppeteer.launch({
-        args: [
-            '--window-size=1920,1080',
-            ...chromium.args
-        ],
+        args: chromium.args,
         defaultViewport: chromium.defaultViewport,
         executablePath: await chromium.executablePath(),
         headless: chromium.headless,

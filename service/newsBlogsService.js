@@ -3,10 +3,7 @@ const chromium = require("@sparticuz/chromium");
 const scrapeNewsBlogs = async (clicks = 0) => {
     try {
         const browser = await puppeteer.launch({
-            args: [
-                '--window-size=1920,1080',
-                ...chromium.args
-            ],
+            args: chromium.args,
             defaultViewport: chromium.defaultViewport,
             executablePath: await chromium.executablePath(),
             headless: chromium.headless,
@@ -70,10 +67,7 @@ const scrapeNewsBlogs = async (clicks = 0) => {
 const scrapeBlogDetails = async (blogUrl) => {
     try {
         const browser = await puppeteer.launch({
-            args: [
-                '--window-size=1920,1080',
-                ...chromium.args
-            ],
+            args: chromium.args,
             defaultViewport: chromium.defaultViewport,
             executablePath: await chromium.executablePath(),
             headless: chromium.headless,
