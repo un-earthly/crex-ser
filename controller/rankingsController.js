@@ -2,6 +2,7 @@ const {
     scrapeCricketRankings,
     scrapeRankings
 } = require('../service/rankingService.js');
+const { cacheMiddleware } = require('../utility/cache.js');
 const getRankings = async (req, res) => {
     const { gen, cat } = req.params;
     let url = `${process.env.BASE}/rankings/${gen.toLowerCase()}/${cat.toLowerCase()}`;
@@ -34,5 +35,6 @@ const getRankings = async (req, res) => {
         res.status(500).send('An error occurred while fetching rankings');
     }
 };
-
-module.exports = { getRankings };
+module.exports = {
+    getRankings: [cacheMiddleware, getRankings]
+};

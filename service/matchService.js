@@ -1,19 +1,9 @@
-const chromium = require("@sparticuz/chromium");
-const puppeteer = require("puppeteer-core");
+const { createPage, navigateAndWait, scrapeData, scrapingMiddleware } = require("../utility");
 
 async function scrapeCommentary(url, limit) {
-    const browser = await puppeteer.launch({
-        args: chromium.args,
-        defaultViewport: chromium.defaultViewport,
-        executablePath: await chromium.executablePath(),
-        headless: chromium.headless,
-        ignoreHTTPSErrors: true,
-    });
-    const page = await browser.newPage();
-
-
+    const page = await createPage();
     try {
-        await page.goto(url, { waitUntil: 'networkidle2' });
+        await navigateAndWait(page, url);
 
         let commentary = [];
         let hasMore = true;
@@ -25,45 +15,43 @@ async function scrapeCommentary(url, limit) {
 
             await new Promise(resolve => setTimeout(resolve, 500));
 
-            // Scrape commentary data
-            const newCommentary = await page.evaluate(() => {
-                const roundcards = document.querySelectorAll('.cm-b-roundcard');
-                return Array.from(roundcards).map(card => {
-                    return {
+            // Scrape commentary data using scrapingMiddleware
+            const newCommentary = await scrapingMiddleware(page, '.cm-b-roundcard', async () => {
+                return page.evaluate(() => {
+                    const roundcards = document.querySelectorAll('.cm-b-roundcard');
+                    return Array.from(roundcards).map(card => ({
                         over: card.querySelector('.cm-b-over')?.textContent.trim() || '',
                         ballUpdate: card.querySelector('.cm-b-ballupdate')?.textContent.trim() || '',
                         commentaryText: card.querySelector('.cm-b-comment-c1')?.textContent.trim() || '',
                         description: card.querySelector('.cm-b-comment-c2')?.textContent.trim() || ''
-                    };
+                    }));
                 });
             });
 
-            if (newCommentary.length === 0) {
+            if (!newCommentary || newCommentary.length === 0) {
                 hasMore = false;
                 break;
             }
+
             commentary = [...commentary, ...newCommentary];
         }
 
-        await browser.close();
         return { commentary, hasMore };
     } catch (error) {
         console.error('Error scraping commentary:', error);
-        await browser.close();
         throw error;
+    } finally {
+        await page.close();
     }
 }
-const getMatchDetailsLayout = async (url) => {
-    const browser = await puppeteer.launch({
-        args: chromium.args,
-        defaultViewport: chromium.defaultViewport,
-        executablePath: await chromium.executablePath(),
-        headless: chromium.headless,
-        ignoreHTTPSErrors: true,
-    });
-    const page = await browser.newPage();
 
-    await page.goto(url, { waitUntil: 'networkidle2' });
+const getMatchDetailsLayout = async (url) => {
+    const page = await createPage();
+
+    await page.goto(url, {
+        waitUntil: ['load', 'domcontentloaded', 'networkidle0', 'networkidle2'],
+        timeout: 60000
+    });
 
     const result = await page.evaluate(() => {
         const getTeamData = (teamSelector) => {
@@ -90,21 +78,16 @@ const getMatchDetailsLayout = async (url) => {
         };
     });
 
-    await browser.close();
     return result;
 };
 async function scrapeMatchInfoDetails(url) {
-    const browser = await puppeteer.launch({
-        args: chromium.args,
-        defaultViewport: chromium.defaultViewport,
-        executablePath: await chromium.executablePath(),
-        headless: chromium.headless,
-        ignoreHTTPSErrors: true,
-    });
-    const page = await browser.newPage();
+    const page = await createPage();
 
     try {
-        await page.goto(url, { waitUntil: 'networkidle2' });
+        await page.goto(url, {
+            waitUntil: ['load', 'domcontentloaded', 'networkidle0', 'networkidle2'],
+            timeout: 60000
+        });
         await page.waitForSelector(".info-container", { visible: true });
         await page.waitForSelector(".live-score-card", { visible: true });
         await page.waitForSelector(".content-wrap", { visible: true })
@@ -374,36 +357,26 @@ async function scrapeMatchInfoDetails(url) {
     } catch (error) {
         console.error('An error occurred while scraping:', error);
         return null;
-    } finally {
-        await browser.close();
     }
 };
 async function scrapeScorecardInfo(url) {
-    const browser = await puppeteer.launch({
-        args: chromium.args,
-        defaultViewport: chromium.defaultViewport,
-        executablePath: await chromium.executablePath(),
-        headless: chromium.headless,
-        ignoreHTTPSErrors: true,
+    const page = await createPage();
+    await page.goto(url, {
+        waitUntil: ['load', 'domcontentloaded', 'networkidle0', 'networkidle2'],
+        timeout: 60000
     });
-    const page = await browser.newPage();
-    await page.goto(url, { waitUntil: 'networkidle2' });
     await page.waitForSelector('.team-tab');
     await page.waitForSelector("img");
-    await page.waitForSelector(".p-section-wrapper");
     await page.waitForSelector(".bowler-table");
 
-    // Get all team tabs and determine the active one
     const tabs = await page.$$('.team-tab');
 
-    // Find the index of the currently active tab
     const activeTabIndex = await page.evaluate(() => {
         const tabs = Array.from(document.querySelectorAll(".team-tab"));
         return tabs.findIndex(tab => tab.classList.contains('bgColor'));
     });
-
-    // Function to scrape data for the currently active tab
     async function scrapeTabData() {
+        await page.waitForSelector('.team-tab')
         return page.evaluate(() => {
             const tabs = Array.from(document.querySelectorAll(".team-tab"));
             const activeTabData = tabs.map(tab => ({
@@ -513,21 +486,13 @@ async function scrapeScorecardInfo(url) {
         }
     }
 
-    await browser.close();
     return allTabsData;
 }
 
 
-async function scrapeLiveMatchInfo(url) {
-    const browser = await puppeteer.launch({
-        args: chromium.args,
-        defaultViewport: chromium.defaultViewport,
-        executablePath: await chromium.executablePath(),
-        headless: chromium.headless,
-        ignoreHTTPSErrors: true,
-    });
-    const page = await browser.newPage();
 
+async function scrapeLiveMatchInfo(url) {
+    const page = await createPage();
 
     try {
         // Navigate to the webpage
@@ -647,24 +612,17 @@ async function scrapeLiveMatchInfo(url) {
         };
     } catch (error) {
         console.error('Error scraping live match info:', error);
-    } finally {
-        await browser.close();
     }
 }
 
 async function getAllMatchService(url) {
-    const browser = await puppeteer.launch({
-        args: chromium.args,
-        defaultViewport: chromium.defaultViewport,
-        executablePath: await chromium.executablePath(),
-        headless: chromium.headless,
-        ignoreHTTPSErrors: true,
-    });
-    const page = await browser.newPage();
-
+    const page = await createPage();
     try {
 
-        await page.goto(url, { waitUntil: 'networkidle2' });
+        await page.goto(url, {
+            waitUntil: ['load', 'domcontentloaded', 'networkidle0', 'networkidle2'],
+            timeout: 60000
+        });
         await page.waitForSelector('.live-card');
         await page.waitForSelector("img")
         const matches = await page.evaluate(() => {
@@ -772,8 +730,6 @@ async function getAllMatchService(url) {
     } catch (error) {
         console.error('Error during scraping:', error);
         throw error;
-    } finally {
-        await browser.close();
     }
 }
 module.exports = {

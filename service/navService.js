@@ -1,18 +1,14 @@
-const chromium = require("@sparticuz/chromium");
-const puppeteer = require("puppeteer-core");
+const { createPage } = require("../utility");
 
 async function scrapeNavBarData() {
+    const page = await createPage();
 
     try {
-        const browser = await puppeteer.launch({
-            args: chromium.args,
-            defaultViewport: chromium.defaultViewport,
-            executablePath: await chromium.executablePath(),
-            headless: chromium.headless,
-            ignoreHTTPSErrors: true,
+
+        await page.goto(process.env.BASE, {
+            waitUntil: ['load', 'domcontentloaded', 'networkidle0', 'networkidle2'],
+            timeout: 60000
         });
-        const page = await browser.newPage();
-        await page.goto('https://crex.live/', { waitUntil: 'networkidle2' });
 
         // Wait for the navigation bar to load
         await page.waitForSelector('#myHeader', { visible: true });
@@ -56,12 +52,14 @@ async function scrapeNavBarData() {
             };
         });
 
-        await browser.close();
-
+        
         return navData;
-    } catch (err) {
-        console.log(err)
-        throw new Error(err.message)
+    } catch (error) {
+        console.error('An error occurred:', error);
+        console.error('Error stack:', error.stack);
+        if (error instanceof puppeteer.errors.TimeoutError) {
+            console.error('Navigation timed out. Current URL:', page.url());
+        }
     }
 }
 

@@ -1,4 +1,5 @@
 const { scrapeNewsBlogs, scrapeBlogDetails } = require("../service/newsBlogsService");
+const { cacheMiddleware } = require("../utility");
 
 
 const getNewsBlogs = async (req, res) => {
@@ -14,11 +15,8 @@ const getNewsBlogs = async (req, res) => {
 };
 const getBlogDetails = async (req, res) => {
     const { slug, cat, id } = req.params;
-
-
     try {
         const url = `https://cricket.one/${cat}/${slug}/${id}`;
-
         const blogDetails = await scrapeBlogDetails(url);
         res.json(blogDetails);
     } catch (error) {
@@ -26,7 +24,9 @@ const getBlogDetails = async (req, res) => {
         res.status(500).json({ error: 'Failed to fetch blog details' });
     }
 };
+
+
 module.exports = {
-    getNewsBlogs,
-    getBlogDetails
- };
+    getNewsBlogs: [cacheMiddleware, getNewsBlogs],
+    getBlogDetails: [cacheMiddleware, getBlogDetails]
+};

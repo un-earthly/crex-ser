@@ -1,29 +1,18 @@
-const chromium = require("@sparticuz/chromium");
-const puppeteer = require("puppeteer-core");
+const { createPage } = require("../utility");
 
 async function scrapeShuffledStatsData(url, maxRetries = 3) {
-    const browser = await puppeteer.launch({
-        args: chromium.args,
-        defaultViewport: chromium.defaultViewport,
-        executablePath: await chromium.executablePath(),
-        headless: chromium.headless,
-        ignoreHTTPSErrors: true,
-    });
-    const page = await browser.newPage();
+    const page = await createPage();
+
     try {
-
-
-        // page.setDefaultNavigationTimeout(60000);
 
         for (let retry = 0; retry < maxRetries; retry++) {
             try {
-                await page.goto(url, { waitUntil: 'networkidle2' });
+                await page.goto(url, {
+                    waitUntil: ['load', 'domcontentloaded', 'networkidle0', 'networkidle2'],
+                    timeout: 60000
+                });
                 await page.waitForSelector(".stats-header", { timeout: 10000 });
                 await page.waitForSelector('tbody tr', { timeout: 10000 });
-
-                // // Scroll to load all data
-                // await autoScroll(page);
-
                 const data = await page.evaluate(() => {
                     const safeGetText = (element, selector) => {
                         const el = element.querySelector(selector);
@@ -89,14 +78,15 @@ async function scrapeShuffledStatsData(url, maxRetries = 3) {
             } catch (error) {
                 console.error(`Attempt ${retry + 1} failed:`, error);
                 if (retry === maxRetries - 1) throw error;
-                await new Promise(resolve => setTimeout(resolve, 5000));  
+                await new Promise(resolve => setTimeout(resolve, 5000));
             }
         }
     } catch (error) {
-        console.error('Scraping failed after max retries:', error);
-        throw error;
-    } finally {
-        if (browser) await browser.close();
+        console.error('An error occurred:', error);
+        console.error('Error stack:', error.stack);
+        if (error instanceof puppeteer.errors.TimeoutError) {
+            console.error('Navigation timed out. Current URL:', page.url());
+        }
     }
 }
 

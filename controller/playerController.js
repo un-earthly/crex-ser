@@ -1,6 +1,7 @@
 const {
     scrapePlayerLayoutData
 } = require("../service/playerService");
+const { cacheMiddleware } = require("../utility");
 async function getProfileLayout(req, res) {
     try {
         const { slug, subSlug } = req.params;
@@ -15,6 +16,7 @@ async function getProfileLayout(req, res) {
     }
 }
 
+
 module.exports = {
-    getProfileLayout
-}
+    getProfileLayout: [cacheMiddleware, getProfileLayout]  
+};

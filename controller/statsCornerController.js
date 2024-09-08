@@ -1,4 +1,5 @@
 const { scrapeShuffledStatsData } = require("../service/statsCornerService");
+const { cacheMiddleware } = require("../utility");
 
 const shuffleStatsCorner = async (req, res) => {
     try {
@@ -24,4 +25,6 @@ const shuffleStatsCorner = async (req, res) => {
     }
 };
 
-module.exports = { shuffleStatsCorner };
+module.exports = {
+    shuffleStatsCorner: [cacheMiddleware, shuffleStatsCorner]
+};

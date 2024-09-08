@@ -1,4 +1,5 @@
 const { getTeams, scrapeFixtureMatches, scrapeAndSaveSeries } = require("../service/fixtureService");
+const { cacheMiddleware } = require("../utility");
 
 async function getFixtureMatch(req, res) {
     try {
@@ -28,7 +29,7 @@ async function getSeriesFixture(req, res) {
     }
 }
 module.exports = {
-    getFixtureMatch,
-    getTeamFixtureMatch,
-    getSeriesFixture
-}
+    getFixtureMatch: [cacheMiddleware, getFixtureMatch],
+    getTeamFixtureMatch: [cacheMiddleware, getTeamFixtureMatch],
+    getSeriesFixture: [cacheMiddleware, getSeriesFixture],
+};

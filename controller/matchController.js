@@ -6,6 +6,7 @@ const {
     scrapeLiveMatchInfo,
     scrapeScorecardInfo
 } = require("../service/matchService");
+const { cacheMiddleware } = require("../utility");
 
 async function scrapeMatchInfoController(req, res) {
     const { param1, param2, param3, param4, param5, param6, sub } = req.params;
@@ -74,9 +75,11 @@ async function scrapeAllMatches(req, res) {
         res.status(500).json({ error: 'Failed to scrape the data' });
     }
 }
+
+
 module.exports = {
-    scraperMatchLayout,
-    scrapeCommentaryController,
-    scrapeMatchInfoController,
-    scrapeAllMatches
-}
+    scraperMatchLayout: [cacheMiddleware, scraperMatchLayout],
+    scrapeCommentaryController: [cacheMiddleware, scrapeCommentaryController],
+    scrapeMatchInfoController: [cacheMiddleware, scrapeMatchInfoController],
+    scrapeAllMatches: [cacheMiddleware, scrapeAllMatches]
+};

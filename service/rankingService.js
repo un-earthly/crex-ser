@@ -1,20 +1,12 @@
-const puppeteer = require("puppeteer-core");
-const chromium = require("@sparticuz/chromium");
+const { createPage } = require("../utility");
 
 async function scrapeRankings(url) {
-    let browser = null;
-
+    const page = await createPage();
     try {
-        const browser = await puppeteer.launch({
-            args: chromium.args,
-            defaultViewport: chromium.defaultViewport,
-            executablePath: await chromium.executablePath(),
-            headless: chromium.headless,
-            ignoreHTTPSErrors: true,
+        await page.goto(url, {
+            waitUntil: ['load', 'domcontentloaded', 'networkidle0', 'networkidle2'],
+            timeout: 60000
         });
-        const page = await browser.newPage();
-
-        await page.goto(url, { waitUntil: 'networkidle2' });
 
         await page.waitForSelector('.card_wrapper', { timeout: 10000 });
 
@@ -71,27 +63,21 @@ async function scrapeRankings(url) {
 
         return rankings;
     } catch (error) {
-        throw error;
-    } finally {
-        if (browser) {
-            await browser.close();
+        console.error('An error occurred:', error);
+        console.error('Error stack:', error.stack);
+        if (error instanceof puppeteer.errors.TimeoutError) {
+            console.error('Navigation timed out. Current URL:', page.url());
         }
     }
 }
 
 async function scrapeCricketRankings(url) {
-
-    const browser = await puppeteer.launch({
-        args: chromium.args,
-        defaultViewport: chromium.defaultViewport,
-        executablePath: await chromium.executablePath(),
-        headless: chromium.headless,
-        ignoreHTTPSErrors: true,
-    });
-    const page = await browser.newPage();
-
+    const page = await createPage();
     try {
-        await page.goto(url, { waitUntil: 'networkidle2' });
+        await page.goto(url, {
+            waitUntil: ['load', 'domcontentloaded', 'networkidle0', 'networkidle2'],
+            timeout: 60000
+        });
 
         const rankings = await page.evaluate(() => {
             const tabContainers = document.querySelectorAll('.card_wrapper');
@@ -127,12 +113,14 @@ async function scrapeCricketRankings(url) {
             return result;
         });
 
-        await browser.close();
+        
         return rankings;
     } catch (error) {
         console.error('An error occurred:', error);
-        await browser.close();
-        throw error;
+        console.error('Error stack:', error.stack);
+        if (error instanceof puppeteer.errors.TimeoutError) {
+            console.error('Navigation timed out. Current URL:', page.url());
+        }
     }
 }
 

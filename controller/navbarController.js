@@ -1,4 +1,6 @@
 const { scrapeNavBarData } = require("../service/navService");
+const { cacheMiddleware } = require("../utility");
+
 
 async function scrapeNavBarDataController(req, res) {
     try {
@@ -10,5 +12,5 @@ async function scrapeNavBarDataController(req, res) {
 }
 
 module.exports = {
-    scrapeNavBarDataController
-}
+    scrapeNavBarDataController: [cacheMiddleware, scrapeNavBarDataController]  // Add caching for scrapeNavBarDataController
+};

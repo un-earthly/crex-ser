@@ -1,18 +1,12 @@
-const chromium = require("@sparticuz/chromium");
-const puppeteer = require("puppeteer-core");
+const { createPage } = require("../utility");
 
 async function seriesScrapper(url) {
-    const browser = await puppeteer.launch({
-        args: chromium.args,
-        defaultViewport: chromium.defaultViewport,
-        executablePath: await chromium.executablePath(),
-        headless: chromium.headless,
-        ignoreHTTPSErrors: true,
-    });
-    const page = await browser.newPage();
-
+    const page = await createPage();
     try {
-        await page.goto(url, { waitUntil: 'networkidle2' });
+        await page.goto(url, {
+            waitUntil: ['load', 'domcontentloaded', 'networkidle0', 'networkidle2'],
+            timeout: 60000
+        });
 
         // Wait for the main content to load
         await page.waitForSelector('.overview-wrapper');
@@ -95,69 +89,70 @@ async function seriesScrapper(url) {
         return content;
     } catch (error) {
         console.error('An error occurred:', error);
-    } finally {
-        await browser.close();
+        console.error('Error stack:', error.stack);
+        if (error instanceof puppeteer.errors.TimeoutError) {
+            console.error('Navigation timed out. Current URL:', page.url());
+        }
     }
 }
 async function scrapeTeamSquad(url) {
-    const browser = await puppeteer.launch({
-        args: chromium.args,
-        defaultViewport: chromium.defaultViewport,
-        executablePath: await chromium.executablePath(),
-        headless: chromium.headless,
-        ignoreHTTPSErrors: true,
-    });
-    const page = await browser.newPage();
-
-    await page.goto(url, { waitUntil: 'networkidle2' });
-
-    const squadData = await page.evaluate(() => {
-        const teams = [];
-        const teamElements = document.querySelectorAll('.series-left-card');
-
-        teamElements.forEach((teamElement, index) => {
-            const teamName = teamElement.querySelector('.name').textContent.trim();
-            const playerCount = teamElement.querySelector('.player-count').textContent.trim();
-
-            // Click on the team tab to load its players
-            teamElement.click();
-
-            // Wait for the players to load (you might need to adjust the timeout)
-            setTimeout(() => { }, 1000);
-
-            const players = [];
-            const playerElements = document.querySelectorAll('.players-wrapper .custom-width');
-
-            playerElements.forEach((playerElement) => {
-                const name = playerElement.querySelector('.name').textContent.trim();
-                const type = playerElement.querySelector('.player-type').textContent.trim();
-                const role = playerElement.closest('.batsmen, .bowler, .allrounder')?.querySelector('.heading')?.textContent.trim() || 'Unknown';
-
-                players.push({ name, type, role });
-            });
-
-            teams.push({ teamName, playerCount, players });
-        });
-
-        return teams;
-    });
-
-    await browser.close();
-    return squadData;
-}
-
-async function scrapeSeriesInfo(url) {
-    const browser = await puppeteer.launch({
-        args: chromium.args,
-        defaultViewport: chromium.defaultViewport,
-        executablePath: await chromium.executablePath(),
-        headless: chromium.headless,
-        ignoreHTTPSErrors: true,
-    });
-    const page = await browser.newPage();
+    const page = await createPage();
 
     try {
-        await page.goto(url, { waitUntil: 'networkidle2' });
+        await page.goto(url, {
+            waitUntil: ['load', 'domcontentloaded', 'networkidle0', 'networkidle2'],
+            timeout: 60000
+        });
+
+        const squadData = await page.evaluate(() => {
+            const teams = [];
+            const teamElements = document.querySelectorAll('.series-left-card');
+
+            teamElements.forEach((teamElement, index) => {
+                const teamName = teamElement.querySelector('.name').textContent.trim();
+                const playerCount = teamElement.querySelector('.player-count').textContent.trim();
+
+                // Click on the team tab to load its players
+                teamElement.click();
+
+                // Wait for the players to load (you might need to adjust the timeout)
+                setTimeout(() => { }, 1000);
+
+                const players = [];
+                const playerElements = document.querySelectorAll('.players-wrapper .custom-width');
+
+                playerElements.forEach((playerElement) => {
+                    const name = playerElement.querySelector('.name').textContent.trim();
+                    const type = playerElement.querySelector('.player-type').textContent.trim();
+                    const role = playerElement.closest('.batsmen, .bowler, .allrounder')?.querySelector('.heading')?.textContent.trim() || 'Unknown';
+
+                    players.push({ name, type, role });
+                });
+
+                teams.push({ teamName, playerCount, players });
+            });
+
+            return teams;
+        });
+
+        return squadData;
+    } catch (error) {
+        console.error('An error occurred:', error);
+        console.error('Error stack:', error.stack);
+        if (error instanceof puppeteer.errors.TimeoutError) {
+            console.error('Navigation timed out. Current URL:', page.url());
+        }
+    }
+}
+async function scrapeSeriesInfo(url) {
+    const page = await createPage();
+
+
+    try {
+        await page.goto(url, {
+            waitUntil: ['load', 'domcontentloaded', 'networkidle0', 'networkidle2'],
+            timeout: 60000
+        });
 
         const seriesInfo = await page.evaluate(() => {
             const infoWrapper = document.querySelector('.series-info-wrapper');
@@ -197,25 +192,20 @@ async function scrapeSeriesInfo(url) {
 
         return seriesInfo;
     } catch (error) {
-        console.error('Error during series info scraping:', error);
-        throw error;
-    } finally {
-        await browser.close();
+        console.error('An error occurred:', error);
+        console.error('Error stack:', error.stack);
+        if (error instanceof puppeteer.errors.TimeoutError) {
+            console.error('Navigation timed out. Current URL:', page.url());
+        }
     }
 }
 async function scrapeMatchesInfo(url) {
-    const browser = await puppeteer.launch({
-        args: chromium.args,
-        defaultViewport: chromium.defaultViewport,
-        executablePath: await chromium.executablePath(),
-        headless: chromium.headless,
-        ignoreHTTPSErrors: true,
-    });
-    const page = await browser.newPage();
-
 
     try {
-        await page.goto(url, { waitUntil: 'networkidle2' });
+        const page = await createPage();
+        await page.goto(url, {
+            waitUntil: ['load', 'domcontentloaded', 'networkidle0', 'networkidle2'],
+        });
 
         const matchesInfo = await page.evaluate(() => {
             const matchesWrapper = document.querySelector('.matches-wrapper');
@@ -242,7 +232,8 @@ async function scrapeMatchesInfo(url) {
                         team1Score,
                         team2Score,
                         result,
-                        startTime
+                        startTime,
+                        link: card.querySelector('a')?.href.replace("https://crex.live", "")
                     };
                 });
 
@@ -260,26 +251,23 @@ async function scrapeMatchesInfo(url) {
 
         return matchesInfo;
     } catch (error) {
-        console.error('Error during matches info scraping:', error);
-        throw error;
-    } finally {
-        await browser.close();
+        console.error('An error occurred:', error);
+        console.error('Error stack:', error.stack);
+        if (error instanceof puppeteer.errors.TimeoutError) {
+            console.error('Navigation timed out. Current URL:', page.url());
+        }
     }
 };
 
 async function scrapeSeriesStats(url) {
-    const browser = await puppeteer.launch({
-        args: chromium.args,
-        defaultViewport: chromium.defaultViewport,
-        executablePath: await chromium.executablePath(),
-        headless: chromium.headless,
-        ignoreHTTPSErrors: true,
-    });
-    const page = await browser.newPage();
+    const page = await createPage();
 
 
     try {
-        await page.goto(url, { waitUntil: 'networkidle2' });
+        await page.goto(url, {
+            waitUntil: ['load', 'domcontentloaded', 'networkidle0', 'networkidle2'],
+            timeout: 60000
+        });
 
         const seriesStats = await page.evaluate(() => {
             const statsWrapper = document.querySelector('.series-stats-wrapper');
@@ -347,23 +335,22 @@ async function scrapeSeriesStats(url) {
 
 
     } catch (error) {
-        throw error;
-    } finally {
-        await browser.close();
+        console.error('An error occurred:', error);
+        console.error('Error stack:', error.stack);
+        if (error instanceof puppeteer.errors.TimeoutError) {
+            console.error('Navigation timed out. Current URL:', page.url());
+        }
     }
 }
 
 async function scrapePointsTable(url) {
-    const browser = await puppeteer.launch({
-        args: chromium.args,
-        defaultViewport: chromium.defaultViewport,
-        executablePath: await chromium.executablePath(),
-        headless: chromium.headless,
-        ignoreHTTPSErrors: true,
-    });
-    const page = await browser.newPage();
+    const page = await createPage();
+
     try {
-        await page.goto(url, { waitUntil: 'networkidle2' });
+        await page.goto(url, {
+            waitUntil: ['load', 'domcontentloaded', 'networkidle0', 'networkidle2'],
+            timeout: 60000
+        });
 
         const pointsTableInfo = await page.evaluate(() => {
             const tableWrapper = document.querySelector('.points-table-wrapper');
@@ -397,25 +384,22 @@ async function scrapePointsTable(url) {
 
         return pointsTableInfo;
     } catch (error) {
-        console.error('Error during points table scraping:', error);
-        throw error;
-    } finally {
-        await browser.close();
+        console.error('An error occurred:', error);
+        console.error('Error stack:', error.stack);
+        if (error instanceof puppeteer.errors.TimeoutError) {
+            console.error('Navigation timed out. Current URL:', page.url());
+        }
     }
 }
 async function scrapeSeriesNews(url) {
-    const browser = await puppeteer.launch({
-        args: chromium.args,
-        defaultViewport: chromium.defaultViewport,
-        executablePath: await chromium.executablePath(),
-        headless: chromium.headless,
-        ignoreHTTPSErrors: true,
-    });
-    const page = await browser.newPage();
+    const page = await createPage();
 
 
     try {
-        await page.goto(url, { waitUntil: 'networkidle2' });
+        await page.goto(url, {
+            waitUntil: ['load', 'domcontentloaded', 'networkidle0', 'networkidle2'],
+            timeout: 60000
+        });
 
         const newsWrapper = await page.evaluate(() => {
             const newsContainer = document.querySelector('.news-wrapper');
@@ -440,18 +424,20 @@ async function scrapeSeriesNews(url) {
                 };
             });
 
-            return { newsItems, title };
+            return {
+                newsItems,
+                title
+            };
         });
 
 
         return newsWrapper;
     } catch (error) {
-        console.error('Error scraping data:', error);
-        await browser.close();
-        throw error;
-    } finally {
-
-        await browser.close();
+        console.error('An error occurred:', error);
+        console.error('Error stack:', error.stack);
+        if (error instanceof puppeteer.errors.TimeoutError) {
+            console.error('Navigation timed out. Current URL:', page.url());
+        }
     }
 }
 
@@ -466,4 +452,4 @@ module.exports = {
     scrapeTeamSquad,
     scrapeSeriesNews
 
- }
+}

@@ -1,34 +1,12 @@
-const chromium = require("@sparticuz/chromium");
-const puppeteer = require("puppeteer-core");
 const connectDB = require("../db.config");
+const { createPage, navigateAndWait, scrapeData } = require("../utility");
 
 async function scrapeFixtureMatches(pageOffset = 0) {
-    const browser = await puppeteer.launch({
-        args: chromium.args,
-        defaultViewport: chromium.defaultViewport,
-        executablePath: await chromium.executablePath(),
-        headless: chromium.headless,
-        ignoreHTTPSErrors: true,
-    });
-    const page = await browser.newPage();
+    const page = await createPage();
     try {
+        await navigateAndWait(page, process.env.BASE + '/fixtures/match-list', pageOffset);
 
-
-        await page.goto(process.env.BASE + '/fixtures/match-list', { waitUntil: 'networkidle2' });
-
-        if (pageOffset !== 0) {
-            const direction = pageOffset > 0 ? 'next-button' : 'prev-button';
-            const clicks = Math.abs(pageOffset);
-
-            for (let i = 0; i < clicks; i++) {
-                await page.waitForSelector(`.${direction}`);
-                await page.click(`.${direction}`);
-                await new Promise(resolve => setTimeout(resolve, 300));
-            }
-        }
-        await page.waitForSelector('.date-wise-matches-card');
-
-        const matchesByDate = await page.evaluate(() => {
+        const matchesByDate = await scrapeData(page, '.date-wise-matches-card', () => {
             const dateSections = document.querySelectorAll('.date-wise-matches-card > div');
             const result = [];
 
@@ -70,72 +48,19 @@ async function scrapeFixtureMatches(pageOffset = 0) {
             return result;
         });
 
-        await browser.close();
         return matchesByDate;
     } catch (e) {
         console.error('Error fetching matches:', e);
         throw e;
     }
 }
-async function getTeams(page = 1, pageSize = 10, searchTerm = '') {
-    try {
-        let db;
-        if (!db) {
-            db = await connectDB();
-            if (!db) {
-                throw new Error('Database connection failed');
-            }
-        }
 
-        const teamsCollection = db.collection("teams");
-
-        // Create a search query based on the search term
-        const query = searchTerm ? { name: { $regex: searchTerm, $options: 'i' } } : {};
-        console.log(query)
-
-        // Apply pagination and sorting
-        const options = {
-            skip: (page - 1) * pageSize,
-            limit: pageSize,
-            sort: { name: 1 } // Sort by name ascending
-        };
-        const teams = await teamsCollection.find(query, options).toArray();
-
-        const totalTeams = await teamsCollection.countDocuments(query);
-
-        return { teams, totalTeams };
-
-    } catch (error) {
-        console.error('Error retrieving teams from database:', error);
-        throw error;
-    }
-};
 async function scrapeAndSaveSeries(url, pageOffset = 0) {
-    const browser = await puppeteer.launch({
-        args: chromium.args,
-        defaultViewport: chromium.defaultViewport,
-        executablePath: await chromium.executablePath(),
-        headless: chromium.headless,
-        ignoreHTTPSErrors: true,
-    });
-    const page = await browser.newPage();
-
+    const page = await createPage();
     try {
-        await page.goto(url, { waitUntil: 'networkidle2' });
+        await navigateAndWait(page, url, pageOffset);
 
-        if (pageOffset !== 0) {
-            const direction = pageOffset > 0 ? 'next-button' : 'prev-button';
-            const clicks = Math.abs(pageOffset);
-
-            for (let i = 0; i < clicks; i++) {
-                await page.waitForSelector(`.${direction}`);
-                await page.click(`.${direction}`);
-                await new Promise(resolve => setTimeout(resolve, 1000));
-            }
-        }
-
-
-        const seriesData = await page.evaluate(() => {
+        const seriesData = await scrapeData(page, '.serieswise', () => {
             const series = [];
             const monthDivs = document.querySelectorAll('.serieswise');
 
@@ -162,9 +87,6 @@ async function scrapeAndSaveSeries(url, pageOffset = 0) {
             return series;
         });
 
-        await browser.close();
-
-
         return {
             seriesData,
             message: `${seriesData.length} series were successfully scraped.`
@@ -176,8 +98,40 @@ async function scrapeAndSaveSeries(url, pageOffset = 0) {
     }
 }
 
+async function getTeams(page = 1, pageSize = 10, searchTerm = '') {
+    try {
+        let db;
+        if (!db) {
+            db = await connectDB();
+            if (!db) {
+                throw new Error('Database connection failed');
+            }
+        }
+
+        const teamsCollection = db.collection("teams");
+
+        const query = searchTerm ? { name: { $regex: searchTerm, $options: 'i' } } : {};
+        console.log(query);
+
+        const options = {
+            skip: (page - 1) * pageSize,
+            limit: pageSize,
+            sort: { name: 1 }
+        };
+        const teams = await teamsCollection.find(query, options).toArray();
+
+        const totalTeams = await teamsCollection.countDocuments(query);
+
+        return { teams, totalTeams };
+
+    } catch (error) {
+        console.error('Error retrieving teams from database:', error);
+        throw error;
+    }
+};
+
 module.exports = {
     scrapeFixtureMatches,
     getTeams,
     scrapeAndSaveSeries
-}
+};

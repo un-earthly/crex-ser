@@ -1,18 +1,13 @@
-const puppeteer = require("puppeteer-core");
-const chromium = require("@sparticuz/chromium");
+const { createPage } = require("../utility");
 const scrapeNewsBlogs = async (clicks = 0) => {
-    try {
-        const browser = await puppeteer.launch({
-            args: chromium.args,
-            defaultViewport: chromium.defaultViewport,
-            executablePath: await chromium.executablePath(),
-            headless: chromium.headless,
-            ignoreHTTPSErrors: true,
-        });
-        const page = await browser.newPage();
+    const page = await createPage();
 
-        await page.goto('https://crex.live/', { waitUntil: 'networkidle2' });
+    try {
+
+
+        await page.goto('https://crex.live', { waitUntil: 'networkidle2' });
         await page.waitForSelector('section.news-topic-wrapper');
+        await page.waitForSelector(".news-card")
 
         if (clicks) {
             for (let i = 0; i < clicks; i++) {
@@ -39,7 +34,7 @@ const scrapeNewsBlogs = async (clicks = 0) => {
             cardElements.forEach(card => {
                 const title = card.querySelector('.heading h2').innerText.trim();
                 const imageUrl = card.querySelector('.news-card-img img').src;
-                const link = card.querySelector('.news-card-img a').href?.replace('https://cricket.one',"");
+                const link = card.querySelector('.news-card-img a').href?.replace('https://cricket.one', "");
                 const tags = Array.from(card.querySelectorAll('.news-tag ul li a')).map(tag => tag.innerText.trim());
                 const description = card.querySelector('.news-heading p').innerText.trim();
                 const time = card.querySelector('.news-time span').innerText.trim();
@@ -57,7 +52,6 @@ const scrapeNewsBlogs = async (clicks = 0) => {
             return cards;
         });
 
-        await browser.close();
         return data;
     } catch (error) {
         console.error('Error scraping the data:', error);
@@ -65,20 +59,15 @@ const scrapeNewsBlogs = async (clicks = 0) => {
     }
 };
 const scrapeBlogDetails = async (blogUrl) => {
+    const page = await createPage();
+
     try {
-        const browser = await puppeteer.launch({
-            args: chromium.args,
-            defaultViewport: chromium.defaultViewport,
-            executablePath: await chromium.executablePath(),
-            headless: chromium.headless,
-            ignoreHTTPSErrors: true,
-        });
-        const page = await browser.newPage();
+
 
         await page.goto(blogUrl, { waitUntil: 'networkidle2' });
 
-        await page.waitForSelector('.blog-details-container'); 
-        
+        await page.waitForSelector('.blog-details-container');
+
         const blogDetails = await page.evaluate(() => {
             const title = document.querySelector('.blog-title').innerText.trim();
             const author = document.querySelector('.author-name').innerText.trim();
@@ -95,7 +84,6 @@ const scrapeBlogDetails = async (blogUrl) => {
             };
         });
 
-        await browser.close();
         return blogDetails;
     } catch (error) {
         console.error('Error scraping blog details:', error);
@@ -106,4 +94,4 @@ const scrapeBlogDetails = async (blogUrl) => {
 module.exports = {
     scrapeNewsBlogs,
     scrapeBlogDetails
- };
+};

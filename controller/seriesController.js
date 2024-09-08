@@ -1,5 +1,6 @@
 
 const { seriesScrapper, scrapeSeriesInfo, scrapeSeriesNews, scrapeSeriesStats, scrapePointsTable, scrapeTeamSquad, scrapeMatchesInfo } = require('../service/seriesDetails');
+const { cacheMiddleware } = require('../utility');
 
 
 async function scrapeSeriesOverview(req, res) {
@@ -57,6 +58,6 @@ async function scrapeSeriesSubRoute(req, res) {
 
 
 module.exports = {
-    scrapeSeriesOverview,
-    scrapeSeriesSubRoute
-}
+    scrapeSeriesOverview: [cacheMiddleware, scrapeSeriesOverview],
+    scrapeSeriesSubRoute: [cacheMiddleware, scrapeSeriesSubRoute]
+};
