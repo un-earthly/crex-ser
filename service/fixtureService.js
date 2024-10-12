@@ -97,6 +97,71 @@ async function scrapeAndSaveSeries(url, pageOffset = 0) {
         throw error;
     }
 }
+async function getFixtures(page = 1, pageSize = 10, dateRange = null) {
+    try {
+        const db = await connectDB();
+        if (!db) {
+            throw new Error('Database connection failed');
+        }
+
+        const fixturesCollection = db.collection("fixtures");
+
+        let query = {};
+        if (dateRange) {
+            query.date = { $gte: dateRange.start, $lte: dateRange.end };
+        }
+
+        const totalFixtures = await fixturesCollection.countDocuments(query);
+        const fixtures = await fixturesCollection.find(query)
+            .sort({ date: 1 })
+            .skip((page - 1) * pageSize)
+            .limit(pageSize)
+            .toArray();
+
+        return {
+            fixtures,
+            totalFixtures,
+            currentPage: page,
+            totalPages: Math.ceil(totalFixtures / pageSize)
+        };
+    } catch (error) {
+        console.error('Error retrieving fixtures from database:', error);
+        throw error;
+    }
+}
+
+async function getSeries(page = 1, pageSize = 10, searchTerm = '') {
+    try {
+        const db = await connectDB();
+        if (!db) {
+            throw new Error('Database connection failed');
+        }
+
+        const seriesCollection = db.collection("series");
+
+        let query = {};
+        if (searchTerm) {
+            query.name = { $regex: searchTerm, $options: 'i' };
+        }
+
+        const totalSeries = await seriesCollection.countDocuments(query);
+        const series = await seriesCollection.find(query)
+            .sort({ month: -1, name: 1 })
+            .skip((page - 1) * pageSize)
+            .limit(pageSize)
+            .toArray();
+
+        return {
+            series,
+            totalSeries,
+            currentPage: page,
+            totalPages: Math.ceil(totalSeries / pageSize)
+        };
+    } catch (error) {
+        console.error('Error retrieving series from database:', error);
+        throw error;
+    }
+}
 
 async function getTeams(page = 1, pageSize = 10, searchTerm = '') {
     try {
@@ -132,6 +197,8 @@ async function getTeams(page = 1, pageSize = 10, searchTerm = '') {
 
 module.exports = {
     scrapeFixtureMatches,
+    scrapeAndSaveSeries,
     getTeams,
-    scrapeAndSaveSeries
+    getFixtures,
+    getSeries
 };

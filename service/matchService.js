@@ -1,4 +1,5 @@
-const { createPage, navigateAndWait, scrapeData, scrapingMiddleware } = require("../utility");
+const connectDB = require("../db.config");
+const { createPage, navigateAndWait, scrapingMiddleware } = require("../utility");
 
 async function scrapeCommentary(url, limit) {
     const page = await createPage();
@@ -6,7 +7,6 @@ async function scrapeCommentary(url, limit) {
         await navigateAndWait(page, url);
 
         let commentary = [];
-        let hasMore = true;
 
         for (let i = 0; i < limit; i++) {
             await page.evaluate(() => {
@@ -15,7 +15,6 @@ async function scrapeCommentary(url, limit) {
 
             await new Promise(resolve => setTimeout(resolve, 500));
 
-            // Scrape commentary data using scrapingMiddleware
             const newCommentary = await scrapingMiddleware(page, '.cm-b-roundcard', async () => {
                 return page.evaluate(() => {
                     const roundcards = document.querySelectorAll('.cm-b-roundcard');
@@ -27,25 +26,34 @@ async function scrapeCommentary(url, limit) {
                     }));
                 });
             });
-
-            if (!newCommentary || newCommentary.length === 0) {
-                hasMore = false;
-                break;
-            }
-
             commentary = [...commentary, ...newCommentary];
         }
 
-        return { commentary, hasMore };
+        const db = await connectDB();
+        const collection = db.collection('commentary');
+        await collection.updateOne(
+            { matchId: url },
+            { $set: { commentaryData: commentary } },
+            { upsert: true }
+        );
+
+        return commentary;
     } catch (error) {
-        console.error('Error scraping commentary:', error);
-        throw error;
+        if (error instanceof TimeoutError) {
+            console.error('Timeout while scraping commentary:', error);
+            throw new Error('Scraping timed out. The page might be slow to load.');
+        } else if (error.name === 'NetworkError') {
+            console.error('Network error while scraping commentary:', error);
+            throw new Error('Network issue encountered. Please check your connection.');
+        } else {
+            console.error('Error scraping commentary:', error);
+            throw new Error('An unexpected error occurred while scraping commentary.');
+        }
     } finally {
         await page.close();
     }
 }
-
-const getMatchDetailsLayout = async (url) => {
+const scrapeMatchDetailsLayout = async (url) => {
     const page = await createPage();
 
     await page.goto(url, {
@@ -78,8 +86,386 @@ const getMatchDetailsLayout = async (url) => {
         };
     });
 
+    const db = await connectDB();
+    const collection = db.collection('matchLayouts');
+    await collection.updateOne(
+        { matchId: url },
+        { $set: { layoutData: result } },
+        { upsert: true }
+    );
+
     return result;
 };
+
+
+async function scrapeScorecardInfo(url) {
+    const page = await createPage();
+    try {
+        await page.goto(url, {
+            waitUntil: ['load', 'domcontentloaded', 'networkidle0', 'networkidle2'],
+            timeout: 60000
+        });
+        await page.waitForSelector('.team-tab');
+        await page.waitForSelector("img");
+        await page.waitForSelector(".bowler-table");
+
+        const allTabsData = await page.evaluate(() => {
+            const tabs = Array.from(document.querySelectorAll('.team-tab'));
+            const activeTabIndex = tabs.findIndex(tab => tab.classList.contains('bgColor'));
+
+            function scrapeTabData() {
+                const activeTabData = tabs.map(tab => ({
+                    text: tab.innerText.trim(),
+                    isActive: tab.classList.contains('bgColor'),
+                    img: tab.querySelector("img")?.src
+                }));
+
+                const partnership = Array.from(document.querySelectorAll(".p-section-wrapper")).map((row) => ({
+                    wicket: row.querySelector('.p-wckt-info')?.textContent.trim(),
+                    batsman1: {
+                        name: row.querySelector('.p-data:first-of-type a p')?.textContent.trim(),
+                        runs: row.querySelector('.p-data:first-of-type p:last-child')?.textContent.split('(')[0].trim(),
+                        balls: row.querySelector('.p-data:first-of-type .run-highlight')?.textContent.replace(/[()]/g, '').trim()
+                    },
+                    partnershipRuns: row.querySelector('.p-data:nth-of-type(2) .p-runs')?.textContent.split('(')[0].trim(),
+                    partnershipBalls: row.querySelector('.p-data:nth-of-type(2) .p-runs span')?.textContent.replace(/[()]/g, '').trim(),
+                    batsman2: {
+                        name: row.querySelector('.p-data:last-of-type a p')?.textContent.trim(),
+                        runs: row.querySelector('.p-data:last-of-type p:last-child')?.textContent.split('(')[0].trim(),
+                        balls: row.querySelector('.p-data:last-of-type .run-highlight')?.textContent.replace(/[()]/g, '').trim()
+                    }
+                }));
+
+                const sections = Array.from(document.querySelectorAll('.table-heading')).map(section => {
+                    const title = section.querySelector('h3')?.textContent.trim();
+                    let data = [];
+                    if (title === "Batting") {
+                        const contentSibling = section.nextElementSibling;
+                        data = Array.from(contentSibling.querySelectorAll('tbody tr')).map(row => ({
+                            batter: row.querySelector('.player-name')?.textContent.trim(),
+                            dismissal: row.querySelector('.dismissal-info')?.textContent.trim(),
+                            runs: row.querySelector('td:nth-child(2) .run-highlight')?.textContent.trim(),
+                            balls: row.querySelector('td:nth-child(3)')?.textContent.trim(),
+                            fours: row.querySelector('td:nth-child(4)')?.textContent.trim(),
+                            sixes: row.querySelector('td:nth-child(5)')?.textContent.trim(),
+                            strikeRate: row.querySelector('td:nth-child(6)')?.textContent.trim(),
+                        }));
+                        const extrasElement = contentSibling.querySelector('.extras-text');
+                        if (extrasElement) {
+                            data.push({ extras: extrasElement.textContent.trim() });
+                        }
+                    } else if (title === "BOWLING") {
+                        const contentSibling = section.nextElementSibling;
+                        data = Array.from(contentSibling.querySelectorAll('.bowler-table tbody tr')).map(row => ({
+                            bowler: row.querySelector('.player-name')?.textContent.trim(),
+                            overs: row.querySelector('td:nth-child(2)')?.textContent.trim(),
+                            maidens: row.querySelector('td:nth-child(3)')?.textContent.trim(),
+                            runsConceded: row.querySelector('td:nth-child(4)')?.textContent.trim(),
+                            wickets: row.querySelector('td:nth-child(5)')?.textContent.trim(),
+                            economy: row.querySelector('td:nth-child(6)')?.textContent.trim()
+                        }));
+                    } else if (title === "FALL OF WICKETS") {
+                        data = Array.from(section.querySelectorAll('tbody tr')).map(row => ({
+                            batsman: row.querySelector('.player-name')?.textContent.trim(),
+                            score: row.querySelector('.run-highlight')?.textContent.trim(),
+                            overs: row.querySelector('td:last-child div')?.textContent.trim()
+                        }));
+                    }
+                    return { title, data };
+                });
+
+                return { activeTabData, partnership, sections };
+            }
+
+            return tabs.map((_, index) => {
+                if (index !== activeTabIndex) {
+                    tabs[index].click();
+                }
+                const data = scrapeTabData();
+                return {
+                    tabIndex: index,
+                    tabName: tabs[index].innerText.trim(),
+                    data: data
+                };
+            });
+        });
+
+        const db = await connectDB();
+        const collection = db.collection('scorecardInfo');
+        await collection.updateOne(
+            { matchId: url },
+            { $set: { scorecardData: allTabsData } },
+            { upsert: true }
+        );
+
+        return allTabsData;
+    } catch (error) {
+        console.error('Error scraping scorecard info:', error);
+        throw error;
+    } finally {
+        await page.close();
+    }
+}
+
+async function scrapeAllMatchService(url) {
+    const page = await createPage();
+    try {
+
+        await page.goto(url, {
+            waitUntil: ['load', 'domcontentloaded', 'networkidle0', 'networkidle2'],
+            timeout: 60000
+        });
+        await page.waitForSelector('.live-card');
+        await page.waitForSelector("img")
+        const matches = await page.evaluate(() => {
+            const matchCards = document.querySelectorAll('.live-card');
+            return Array.from(matchCards).map(card => {
+                const statusElement = card.querySelector('.live-card-top .ce-data span');
+                let status = statusElement ? statusElement.textContent.trim() : 'Upcoming';
+
+                const seriesName = card.querySelector('.snameTag')?.textContent.trim();
+                const matchNumber = card.querySelector('.match-number')?.textContent.trim();
+                const venue = card.querySelector('.match-number span:last-child')?.textContent.trim();
+
+                const team1 = card.querySelector('.team-score:first-child');
+                const team2 = card.querySelector('.team-score:last-child');
+
+                const getTeamInfo = (teamElement) => {
+                    const name = teamElement.querySelector('img')?.getAttribute('title') ||
+                        teamElement.querySelector('span:not(.match-score):not(.match-over)')?.textContent.trim();
+
+                    let score = null;
+                    let overs = null;
+
+                    const scoreSpan = teamElement.querySelector('span:not(:first-child):not(.match-over)');
+                    if (scoreSpan) {
+                        const scoreText = scoreSpan.textContent.trim();
+                        const scoreParts = scoreText.split('/');
+                        if (scoreParts.length === 2) {
+                            score = scoreText;
+                        }
+                    }
+
+                    const oversSpan = teamElement.querySelector('.match-over');
+                    if (oversSpan) {
+                        overs = oversSpan.textContent.trim();
+                    } else if (scoreSpan) {
+                        const fullText = scoreSpan.textContent.trim();
+                        const overMatch = fullText.match(/\((\d+(\.\d+)?)\)/);
+                        if (overMatch) {
+                            overs = overMatch[1];
+                        }
+                    }
+
+                    if (score === null) {
+                        const allSpans = teamElement.querySelectorAll('span');
+                        allSpans.forEach(span => {
+                            const text = span.textContent.trim();
+                            if (text.includes('/') && !text.includes('(')) {
+                                score = text;
+                            } else if (!overs && text.match(/^\d+(\.\d+)?$/)) {
+                                overs = text;
+                            }
+                        });
+                    }
+
+                    return {
+                        name,
+                        score: score,
+                        overs: overs,
+                        logo: teamElement.querySelector("img")?.src
+                    };
+                };
+
+                const team1Info = getTeamInfo(team1);
+                const team2Info = getTeamInfo(team2);
+
+                const resultElement = card.querySelector('.comment, span[style*="color: var(--ce_highlight_ac3)"]');
+                const result = resultElement ? resultElement.textContent.trim() : null;
+
+                if (result && (result.includes('won by') || result.includes('match tied'))) {
+                    status = 'Finished';
+                } else if (status.toLowerCase() === 'live' || (result && result.includes('won the toss'))) {
+                    status = 'Live';
+                } else if (team1Info.score || team2Info.score) {
+                    status = 'Live';
+                } else {
+                    status = 'Upcoming';
+                }
+
+                const upcomingTime = card.querySelector('.upcomingTime')?.title;
+
+                const matchDate = card.querySelector('.upcomingTime')?.textContent.trim();
+                const startTimeElement = card.querySelector('.match-data');
+                const startTime = startTimeElement ? startTimeElement.textContent.trim() : null;
+
+                return {
+                    status,
+                    seriesName,
+                    matchNumber,
+                    venue,
+                    team1: team1Info,
+                    team2: team2Info,
+                    result,
+                    upcomingTime,
+                    matchDate,
+                    startTime,
+                    link: card.querySelector('.live-card>a')?.href.replace('https://crex.live', '') || null
+
+                };
+            });
+        });
+
+        const db = await connectDB();
+        const collection = db.collection('allMatches');
+        await collection.updateOne(
+            { type: 'allMatches' },
+            { $set: { matchesData: matches } },
+            { upsert: true }
+        );
+
+        return matches;
+    } catch (error) {
+        console.error('Error during scraping:', error);
+        throw error;
+    } finally {
+        if (page) {
+            await page.close();
+        }
+    }
+}
+async function scrapeLiveMatchInfo(url) {
+    const page = await createPage();
+
+    try {
+        // Navigate to the webpage
+        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+        await page.waitForSelector('.overs-slide');
+
+        // Scrape player data
+        const playersData = await page.evaluate(() => {
+            const playerCards = document.querySelectorAll('.batsmen-partnership');
+            return Array.from(playerCards).map(card => {
+                return {
+                    name: card.querySelector('.batsmen-name')?.textContent.trim() || null,
+                    img: card.querySelector('img')?.src || null,
+                    link: card.querySelector('a')?.href.replace("https://crex.live", "") || null,
+                    score: {
+                        runs: card.querySelectorAll('.batsmen-score p')[0]?.innerText || null,
+                        ball: card.querySelectorAll('.batsmen-score p')[1]?.innerText || null,
+                    },
+                    strikeRate: Array.from(card.querySelectorAll('.strike-rate')).map(srCard => {
+                        const spans = srCard.querySelectorAll('span');
+                        return {
+                            [spans[0]?.textContent.trim()]: spans[1]?.textContent.trim()
+                        };
+                    })
+                };
+            });
+        });
+
+        // Scrape overs data
+        const oversData = await page.evaluate(() => {
+            const slides = document.querySelectorAll(".overs-slide");
+            return Array.from(slides).map(slide => {
+                return {
+                    thisOver: slide.querySelector("span")?.textContent.trim() || '',
+                    overData: Array.from(slide.querySelectorAll(".over-ball")).map(ball => ball.textContent.trim())
+                };
+            });
+        });
+
+        const probability = await page.evaluate(() => {
+            const teamNames = Array.from(document.querySelectorAll('.odds-session-left .teamNameScreenText'))
+                .map(el => el.textContent.trim());
+            const percentages = Array.from(document.querySelectorAll('.odds-session-left .percentageScreenText'))
+                .map(el => el.textContent.trim());
+            const progressBarWidth = document.querySelector('#favTeamProgress')?.style.width || '0%';
+            return { teams: teamNames, percentages, progressBarWidth };
+        });
+
+        const projectedScore = await page.evaluate(() => {
+            const headers = document.querySelectorAll('.projected-score .p-score thead th span.rr-text.rr-data');
+            const rows = document.querySelectorAll('.projected-score .p-score tbody tr');
+
+            return {
+                headers: Array.from(headers).map(header => header.textContent.trim()),
+                rows: Array.from(rows).map(row => {
+                    const cols = row.querySelectorAll('td span.over-data');
+                    return Array.from(cols).map(col => col.textContent.trim());
+                })
+            };
+        });
+        const playerOfTheMatch = await page.evaluate(() => {
+            const pomCard = document.querySelector('.player-of-match-card');
+            if (!pomCard) return null;
+
+            const playerLink = pomCard.querySelector('a');
+            const playerName = pomCard.querySelector('.mom-player')?.textContent.trim();
+            const team = pomCard.querySelector('.profile span:not(.mom-player)')?.textContent.trim();
+            const performanceData = Array.from(pomCard.querySelectorAll('.data-card-pom')).map(card => card.textContent.trim());
+
+            return {
+                name: playerName || null,
+                team: team || null,
+                link: playerLink?.href.replace("https://crex.live", "") || null,
+                performance: performanceData
+            };
+        });
+
+        const inningWiseSessionPR = await page.evaluate(() => {
+            const sessions = document.querySelectorAll('app-match-inning-wise-session');
+            return Array.from(sessions).map(session => {
+                const teamInfos = Array.from(session.querySelectorAll('.ssn-data')).map(dataItem => {
+                    const sessionDetails = [];
+                    const tableElement = dataItem.closest('.ssn-score').querySelector('.p-score');
+
+                    if (tableElement) {
+                        Array.from(tableElement.querySelectorAll('tbody tr')).forEach(row => {
+                            const cells = row.querySelectorAll('td');
+                            if (cells.length === 3) {
+                                sessionDetails.push({
+                                    session: cells[0]?.innerText.trim(),
+                                    open: cells[1]?.innerText.trim(),
+                                    pass: cells[2]?.innerText.trim()
+                                });
+                            }
+                        });
+                    } else {
+                        console.warn(`Table not found for team: ${dataItem.innerText.trim()}`);
+                    }
+
+                    return {
+                        teamName: dataItem.querySelector(".ps-text")?.innerText.trim() || null,
+                        sessionDetails
+                    };
+                });
+
+                return teamInfos;
+            });
+        });
+
+        const result = {
+            playersData,
+            oversData,
+            projectedScore,
+            probability,
+            inningWiseSessionPR,
+            playerOfTheMatch
+        };
+        const db = await connectDB();
+        const collection = db.collection('liveMatchInfo');
+        await collection.updateOne(
+            { matchId: url },
+            { $set: { liveMatchData: result } },
+            { upsert: true }
+        );
+
+        return result;
+    } catch (error) {
+        console.error('Error scraping live match info:', error);
+    }
+}
 async function scrapeMatchInfoDetails(url) {
     const page = await createPage();
 
@@ -353,390 +739,120 @@ async function scrapeMatchInfoDetails(url) {
         matchDetails.venueDetails = venueDetails;
         matchDetails.playerData = playerData
         matchDetails.umpireData = umpireData;
+        const db = await connectDB();
+        const collection = db.collection('matchInfoDetails');
+        await collection.updateOne(
+            { matchId: url },
+            { $set: { matchInfoData: matchDetails } },
+            { upsert: true }
+        );
+
         return matchDetails;
     } catch (error) {
         console.error('An error occurred while scraping:', error);
         return null;
     }
 };
-async function scrapeScorecardInfo(url) {
-    const page = await createPage();
-    await page.goto(url, {
-        waitUntil: ['load', 'domcontentloaded', 'networkidle0', 'networkidle2'],
-        timeout: 60000
-    });
-    await page.waitForSelector('.team-tab');
-    await page.waitForSelector("img");
-    await page.waitForSelector(".bowler-table");
 
-    const tabs = await page.$$('.team-tab');
 
-    const activeTabIndex = await page.evaluate(() => {
-        const tabs = Array.from(document.querySelectorAll(".team-tab"));
-        return tabs.findIndex(tab => tab.classList.contains('bgColor'));
-    });
-    async function scrapeTabData() {
-        await page.waitForSelector('.team-tab')
-        return page.evaluate(() => {
-            const tabs = Array.from(document.querySelectorAll(".team-tab"));
-            const activeTabData = tabs.map(tab => ({
-                text: tab.innerText.trim(),
-                isActive: tab.classList.contains('bgColor'),
-                img: tab.querySelector("img")?.src
-            }));
-
-            const partnership = Array.from(document.querySelectorAll(".p-section-wrapper"));
-            const partnerShipRows = partnership.map((row) => {
-                return {
-                    wicket: row.querySelector('.p-wckt-info')?.textContent.trim(),
-                    batsman1: {
-                        name: row.querySelector('.p-data:first-of-type a p')?.textContent.trim(),
-                        runs: row.querySelector('.p-data:first-of-type p:last-child')?.textContent.split('(')[0].trim(),
-                        balls: row.querySelector('.p-data:first-of-type .run-highlight')?.textContent.replace(/[()]/g, '').trim()
-                    },
-                    partnershipRuns: row.querySelector('.p-data:nth-of-type(2) .p-runs')?.textContent.split('(')[0].trim(),
-                    partnershipBalls: row.querySelector('.p-data:nth-of-type(2) .p-runs span')?.textContent.replace(/[()]/g, '').trim(),
-                    batsman2: {
-                        name: row.querySelector('.p-data:last-of-type a p')?.textContent.trim(),
-                        runs: row.querySelector('.p-data:last-of-type p:last-child')?.textContent.split('(')[0].trim(),
-                        balls: row.querySelector('.p-data:last-of-type .run-highlight')?.textContent.replace(/[()]/g, '').trim()
-                    }
-                };
-            });
-
-            const sections = Array.from(document.querySelectorAll('.table-heading'));
-            const sectionsData = sections.map(section => {
-                const title = section.querySelector('h3')?.textContent.trim();
-                let data = [];
-                if (title === "Batting") {
-                    const contentSibling = section.nextElementSibling;
-                    data = Array.from(contentSibling.querySelectorAll('tbody tr')).map(row => ({
-                        batter: row.querySelector('.player-name')?.textContent.trim(),
-                        dismissal: row.querySelector('.dismissal-info')?.textContent.trim(),
-                        runs: row.querySelector('td:nth-child(2) .run-highlight')?.textContent.trim(),
-                        balls: row.querySelector('td:nth-child(3)')?.textContent.trim(),
-                        fours: row.querySelector('td:nth-child(4)')?.textContent.trim(),
-                        sixes: row.querySelector('td:nth-child(5)')?.textContent.trim(),
-                        strikeRate: row.querySelector('td:nth-child(6)')?.textContent.trim(),
-                    }));
-                    const extrasElement = contentSibling.querySelector('.extras-text');
-                    if (extrasElement) {
-                        const extrasText = extrasElement.textContent.trim();
-                        data.push({ extras: extrasText });
-                    }
-                } else if (title === "BOWLING") {
-                    const contentSibling = section.nextElementSibling;
-                    data = Array.from(contentSibling.querySelectorAll('.bowler-table tbody tr')).map(row => ({
-                        bowler: row.querySelector('.player-name')?.textContent.trim(),
-                        overs: row.querySelector('td:nth-child(2)')?.textContent.trim(),
-                        maidens: row.querySelector('td:nth-child(3)')?.textContent.trim(),
-                        runsConceded: row.querySelector('td:nth-child(4)')?.textContent.trim(),
-                        wickets: row.querySelector('td:nth-child(5)')?.textContent.trim(),
-                        economy: row.querySelector('td:nth-child(6)')?.textContent.trim()
-                    }));
-                } else if (title === "FALL OF WICKETS") {
-                    data = Array.from(section.querySelectorAll('tbody tr')).map(row => {
-                        return {
-                            batsman: row.querySelector('.player-name')?.textContent.trim(),
-                            score: row.querySelector('.run-highlight')?.textContent.trim(),
-                            overs: row.querySelector('td:last-child div')?.textContent.trim()
-                        };
-                    });
-                } else {
-                    return;
-                }
-
-                return {
-                    title: title,
-                    data
-                };
-            });
-
-            return {
-                activeTabData,
-                partnerShipRows,
-                sectionsData
-            };
-        });
-    }
-
-    // Store data for all tabs
-    const allTabsData = [];
-
-    // Scrape data for the currently active tab first
-    const activeTabData = await scrapeTabData();
-    allTabsData.push({
-        tabIndex: activeTabIndex,
-        tabName: await tabs[activeTabIndex].evaluate(tab => tab.innerText.trim()),
-        data: activeTabData
-    });
-
-    // Now scrape data for the other tabs
-    for (let i = 0; i < tabs.length; i++) {
-        if (i !== activeTabIndex) {
-            await tabs[i].click();  // Switch to the tab
-            await Promise.resolve(r => r, 1000)
-
-            const tabData = await scrapeTabData();
-            allTabsData.push({
-                tabIndex: i,
-                tabName: await tabs[i].evaluate(tab => tab.innerText.trim()),
-                data: tabData
-            });
+async function getCommentary(matchId, limit) {
+    const db = await connectDB();
+    try {
+        const collection = db.collection('commentary');
+        const result = await collection.findOne({ matchId });
+        if (result && result.commentaryData && result.commentaryData.commentary) {
+            result.commentaryData.commentary = result.commentaryData.commentary.slice(0, limit);
         }
-    }
-
-    return allTabsData;
-}
-
-
-
-async function scrapeLiveMatchInfo(url) {
-    const page = await createPage();
-
-    try {
-        // Navigate to the webpage
-        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
-        await page.waitForSelector('.overs-slide');
-
-        // Scrape player data
-        const playersData = await page.evaluate(() => {
-            const playerCards = document.querySelectorAll('.batsmen-partnership');
-            return Array.from(playerCards).map(card => {
-                return {
-                    name: card.querySelector('.batsmen-name')?.textContent.trim() || null,
-                    img: card.querySelector('img')?.src || null,
-                    link: card.querySelector('a')?.href.replace("https://crex.live", "") || null,
-                    score: {
-                        runs: card.querySelectorAll('.batsmen-score p')[0]?.innerText || null,
-                        ball: card.querySelectorAll('.batsmen-score p')[1]?.innerText || null,
-                    },
-                    strikeRate: Array.from(card.querySelectorAll('.strike-rate')).map(srCard => {
-                        const spans = srCard.querySelectorAll('span');
-                        return {
-                            [spans[0]?.textContent.trim()]: spans[1]?.textContent.trim()
-                        };
-                    })
-                };
-            });
-        });
-
-        // Scrape overs data
-        const oversData = await page.evaluate(() => {
-            const slides = document.querySelectorAll(".overs-slide");
-            return Array.from(slides).map(slide => {
-                return {
-                    thisOver: slide.querySelector("span")?.textContent.trim() || '',
-                    overData: Array.from(slide.querySelectorAll(".over-ball")).map(ball => ball.textContent.trim())
-                };
-            });
-        });
-
-        const probability = await page.evaluate(() => {
-            const teamNames = Array.from(document.querySelectorAll('.odds-session-left .teamNameScreenText'))
-                .map(el => el.textContent.trim());
-            const percentages = Array.from(document.querySelectorAll('.odds-session-left .percentageScreenText'))
-                .map(el => el.textContent.trim());
-            const progressBarWidth = document.querySelector('#favTeamProgress')?.style.width || '0%';
-            return { teams: teamNames, percentages, progressBarWidth };
-        });
-
-        const projectedScore = await page.evaluate(() => {
-            const headers = document.querySelectorAll('.projected-score .p-score thead th span.rr-text.rr-data');
-            const rows = document.querySelectorAll('.projected-score .p-score tbody tr');
-
-            return {
-                headers: Array.from(headers).map(header => header.textContent.trim()),
-                rows: Array.from(rows).map(row => {
-                    const cols = row.querySelectorAll('td span.over-data');
-                    return Array.from(cols).map(col => col.textContent.trim());
-                })
-            };
-        });
-        const playerOfTheMatch = await page.evaluate(() => {
-            const pomCard = document.querySelector('.player-of-match-card');
-            if (!pomCard) return null;
-
-            const playerLink = pomCard.querySelector('a');
-            const playerName = pomCard.querySelector('.mom-player')?.textContent.trim();
-            const team = pomCard.querySelector('.profile span:not(.mom-player)')?.textContent.trim();
-            const performanceData = Array.from(pomCard.querySelectorAll('.data-card-pom')).map(card => card.textContent.trim());
-
-            return {
-                name: playerName || null,
-                team: team || null,
-                link: playerLink?.href.replace("https://crex.live", "") || null,
-                performance: performanceData
-            };
-        });
-
-        const inningWiseSessionPR = await page.evaluate(() => {
-            const sessions = document.querySelectorAll('app-match-inning-wise-session');
-            return Array.from(sessions).map(session => {
-                const teamInfos = Array.from(session.querySelectorAll('.ssn-data')).map(dataItem => {
-                    const sessionDetails = [];
-                    const tableElement = dataItem.closest('.ssn-score').querySelector('.p-score');
-
-                    if (tableElement) {
-                        Array.from(tableElement.querySelectorAll('tbody tr')).forEach(row => {
-                            const cells = row.querySelectorAll('td');
-                            if (cells.length === 3) {
-                                sessionDetails.push({
-                                    session: cells[0]?.innerText.trim(),
-                                    open: cells[1]?.innerText.trim(),
-                                    pass: cells[2]?.innerText.trim()
-                                });
-                            }
-                        });
-                    } else {
-                        console.warn(`Table not found for team: ${dataItem.innerText.trim()}`);
-                    }
-
-                    return {
-                        teamName: dataItem.querySelector(".ps-text")?.innerText.trim() || null,
-                        sessionDetails
-                    };
-                });
-
-                return teamInfos;
-            });
-        });
-
-        return {
-            playersData,
-            oversData,
-            projectedScore,
-            probability,
-            inningWiseSessionPR,
-            playerOfTheMatch
-        };
+        return result ? result.commentaryData : null;
     } catch (error) {
-        console.error('Error scraping live match info:', error);
-    }
-}
-
-async function getAllMatchService(url) {
-    const page = await createPage();
-    try {
-
-        await page.goto(url, {
-            waitUntil: ['load', 'domcontentloaded', 'networkidle0', 'networkidle2'],
-            timeout: 60000
-        });
-        await page.waitForSelector('.live-card');
-        await page.waitForSelector("img")
-        const matches = await page.evaluate(() => {
-            const matchCards = document.querySelectorAll('.live-card');
-            return Array.from(matchCards).map(card => {
-                const statusElement = card.querySelector('.live-card-top .ce-data span');
-                let status = statusElement ? statusElement.textContent.trim() : 'Upcoming';
-
-                const seriesName = card.querySelector('.snameTag')?.textContent.trim();
-                const matchNumber = card.querySelector('.match-number')?.textContent.trim();
-                const venue = card.querySelector('.match-number span:last-child')?.textContent.trim();
-
-                const team1 = card.querySelector('.team-score:first-child');
-                const team2 = card.querySelector('.team-score:last-child');
-
-                const getTeamInfo = (teamElement) => {
-                    const name = teamElement.querySelector('img')?.getAttribute('title') ||
-                        teamElement.querySelector('span:not(.match-score):not(.match-over)')?.textContent.trim();
-
-                    let score = null;
-                    let overs = null;
-
-                    const scoreSpan = teamElement.querySelector('span:not(:first-child):not(.match-over)');
-                    if (scoreSpan) {
-                        const scoreText = scoreSpan.textContent.trim();
-                        const scoreParts = scoreText.split('/');
-                        if (scoreParts.length === 2) {
-                            score = scoreText;
-                        }
-                    }
-
-                    const oversSpan = teamElement.querySelector('.match-over');
-                    if (oversSpan) {
-                        overs = oversSpan.textContent.trim();
-                    } else if (scoreSpan) {
-                        const fullText = scoreSpan.textContent.trim();
-                        const overMatch = fullText.match(/\((\d+(\.\d+)?)\)/);
-                        if (overMatch) {
-                            overs = overMatch[1];
-                        }
-                    }
-
-                    if (score === null) {
-                        const allSpans = teamElement.querySelectorAll('span');
-                        allSpans.forEach(span => {
-                            const text = span.textContent.trim();
-                            if (text.includes('/') && !text.includes('(')) {
-                                score = text;
-                            } else if (!overs && text.match(/^\d+(\.\d+)?$/)) {
-                                overs = text;
-                            }
-                        });
-                    }
-
-                    return {
-                        name,
-                        score: score,
-                        overs: overs,
-                        logo: teamElement.querySelector("img")?.src
-                    };
-                };
-
-                const team1Info = getTeamInfo(team1);
-                const team2Info = getTeamInfo(team2);
-
-                const resultElement = card.querySelector('.comment, span[style*="color: var(--ce_highlight_ac3)"]');
-                const result = resultElement ? resultElement.textContent.trim() : null;
-
-                if (result && (result.includes('won by') || result.includes('match tied'))) {
-                    status = 'Finished';
-                } else if (status.toLowerCase() === 'live' || (result && result.includes('won the toss'))) {
-                    status = 'Live';
-                } else if (team1Info.score || team2Info.score) {
-                    status = 'Live';
-                } else {
-                    status = 'Upcoming';
-                }
-
-                const upcomingTime = card.querySelector('.upcomingTime')?.title;
-
-                const matchDate = card.querySelector('.upcomingTime')?.textContent.trim();
-                const startTimeElement = card.querySelector('.match-data');
-                const startTime = startTimeElement ? startTimeElement.textContent.trim() : null;
-
-                return {
-                    status,
-                    seriesName,
-                    matchNumber,
-                    venue,
-                    team1: team1Info,
-                    team2: team2Info,
-                    result,
-                    upcomingTime,
-                    matchDate,
-                    startTime,
-                    link: card.querySelector('.live-card>a')?.href.replace('https://crex.live', '') || null
-
-                };
-            });
-        });
-
-
-
-        return matches;
-    } catch (error) {
-        console.error('Error during scraping:', error);
+        console.error('Error fetching commentary:', error);
         throw error;
+    } finally {
+        await db.close();
     }
 }
+
+async function getMatchLayout(matchId) {
+    const db = await connectDB();
+    try {
+        const collection = db.collection('matchLayouts');
+        const result = await collection.findOne({ matchId });
+        return result ? result.layoutData : null;
+    } catch (error) {
+        console.error('Error fetching match layout:', error);
+        throw error;
+    } finally {
+        await db.close();
+    }
+}
+
+async function getScorecardInfo(matchId) {
+    const db = await connectDB();
+    try {
+        const collection = db.collection('scorecardInfo');
+        const result = await collection.findOne({ matchId });
+        return result ? result.scorecardData : null;
+    } catch (error) {
+        console.error('Error fetching scorecard info:', error);
+        throw error;
+    } finally {
+        await db.close();
+    }
+}
+
+async function getAllMatches() {
+    const db = await connectDB();
+    try {
+        const collection = db.collection('allMatches');
+        const result = await collection.findOne({ type: 'allMatches' });
+        return result ? result.matchesData : null;
+    } catch (error) {
+        console.error('Error fetching all matches:', error);
+        throw error;
+    } finally {
+        await db.close();
+    }
+}
+
+async function getLiveMatchInfo(matchId) {
+    const db = await connectDB();
+    try {
+        const collection = db.collection('liveMatchInfo');
+        const result = await collection.findOne({ matchId });
+        return result ? result.liveMatchData : null;
+    } catch (error) {
+        console.error('Error fetching live match info:', error);
+        throw error;
+    } finally {
+        await db.close();
+    }
+}
+
+async function getMatchInfoDetails(matchId) {
+    const db = await connectDB();
+    try {
+        const collection = db.collection('matchInfoDetails');
+        const result = await collection.findOne({ matchId });
+        return result ? result.matchInfoData : null;
+    } catch (error) {
+        console.error('Error fetching match info details:', error);
+        throw error;
+    } finally {
+        await db.close();
+    }
+}
+
 module.exports = {
     scrapeCommentary,
-    getMatchDetailsLayout,
+    scrapeMatchDetailsLayout,
     scrapeMatchInfoDetails,
     scrapeScorecardInfo,
     scrapeLiveMatchInfo,
-    getAllMatchService
+    scrapeAllMatchService,
+    getCommentary,
+    getMatchLayout,
+    getScorecardInfo,
+    getAllMatches,
+    getLiveMatchInfo,
+    getMatchInfoDetails
 }
