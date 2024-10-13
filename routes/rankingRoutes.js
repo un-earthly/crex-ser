@@ -1,7 +1,8 @@
 const express = require('express');
-const { getRankings } = require('../controller/rankingsController');
+const { getRankingsController, scrapeRankingsController } = require('../controller/rankingsController');
 const router = express.Router();
 
-router.get('/:gen/:cat', getRankings);
+router.get('/scrape/:gen/:cat', scrapeRankingsController);
+router.get('/:gen/:cat', getRankingsController);
 
 module.exports = router;

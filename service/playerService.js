@@ -1,5 +1,5 @@
+const connectDB = require("../db.config");
 const { createPage } = require("../utility");
-
 async function scrapePlayerLayoutData(url) {
     const page = await createPage();
 
@@ -43,6 +43,7 @@ async function scrapePlayerLayoutData(url) {
                 rankings
             };
         });
+        await savePlayerData(playerData);
 
         return playerData;
     } catch (error) {
@@ -51,8 +52,73 @@ async function scrapePlayerLayoutData(url) {
         if (error instanceof puppeteer.errors.TimeoutError) {
             console.error('Navigation timed out. Current URL:', page.url());
         }
+    } finally {
+        await page.close();
+    }
+}
+
+async function savePlayerData(playerData) {
+    const db = await connectDB();
+    try {
+        const collection = db.collection('playerData');
+        await collection.updateOne(
+            { playerFName: playerData.playerFName, playerLName: playerData.playerLName },
+            { $set: playerData },
+            { upsert: true }
+        );
+        console.log('Player data saved to MongoDB');
+    } catch (error) {
+        console.error('Error saving player data to MongoDB:', error);
+        throw error;
+    } finally {
+        await db.close();
+    }
+}
+
+async function getPlayerData(firstName, lastName) {
+    const db = await connectDB();
+    try {
+        const collection = db.collection('playerData');
+        const result = await collection.findOne({ playerFName: firstName, playerLName: lastName });
+        return result;
+    } catch (error) {
+        console.error('Error fetching player data from MongoDB:', error);
+        throw error;
+    } finally {
+        await db.close();
+    }
+}
+
+async function getAllPlayers() {
+    const db = await connectDB();
+    try {
+        const collection = db.collection('playerData');
+        const result = await collection.find({}).toArray();
+        return result;
+    } catch (error) {
+        console.error('Error fetching all player data from MongoDB:', error);
+        throw error;
+    } finally {
+        await db.close();
+    }
+}
+
+async function getPlayersByTeam(teamName) {
+    const db = await connectDB();
+    try {
+        const collection = db.collection('playerData');
+        const result = await collection.find({ teamName: teamName }).toArray();
+        return result;
+    } catch (error) {
+        console.error('Error fetching player data by team from MongoDB:', error);
+        throw error;
+    } finally {
+        await db.close();
     }
 }
 module.exports = {
-    scrapePlayerLayoutData
+    scrapePlayerLayoutData,
+    getAllPlayers,
+    getPlayersByTeam,
+    getPlayerData
 }

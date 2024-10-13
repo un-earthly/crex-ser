@@ -51,6 +51,7 @@ const scrapeNewsBlogs = async (clicks = 0) => {
 
             return cards;
         });
+        await saveNewsBlogsData(data);
 
         return data;
     } catch (error) {
@@ -83,6 +84,7 @@ const scrapeBlogDetails = async (blogUrl) => {
                 imageUrl
             };
         });
+        await saveBlogDetailsData(blogDetails);
 
         return blogDetails;
     } catch (error) {
@@ -90,8 +92,67 @@ const scrapeBlogDetails = async (blogUrl) => {
         throw new Error('Failed to scrape blog details');
     }
 };
+async function saveNewsBlogsData(data) {
+    const db = await connectDB();
+    try {
+        const collection = db.collection('newsBlogs');
+        await collection.updateOne(
+            { id: 'newsBlogs' },
+            { $set: { data: data } },
+            { upsert: true }
+        );
+        console.log('News blogs data saved to MongoDB');
+    } catch (error) {
+        console.error('Error saving news blogs data to MongoDB:', error);
+        throw error;
+    } finally {
+        await db.close();
+    }
+}
 
+async function saveBlogDetailsData(blogDetails) {
+    const db = await connectDB();
+    try {
+        const collection = db.collection('blogDetails');
+        await collection.insertOne(blogDetails);
+        console.log('Blog details saved to MongoDB');
+    } catch (error) {
+        console.error('Error saving blog details to MongoDB:', error);
+        throw error;
+    } finally {
+        await db.close();
+    }
+}
+
+async function getNewsBlogsData() {
+    const db = await connectDB();
+    try {
+        const collection = db.collection('newsBlogs');
+        const result = await collection.findOne({ id: 'newsBlogs' });
+        return result ? result.data : null;
+    } catch (error) {
+        console.error('Error fetching news blogs data from MongoDB:', error);
+        throw error;
+    } finally {
+        await db.close();
+    }
+}
+
+async function getBlogDetailsData() {
+    const db = await connectDB();
+    try {
+        const collection = db.collection('blogDetails');
+        return await collection.find().toArray();
+    } catch (error) {
+        console.error('Error fetching blog details from MongoDB:', error);
+        throw error;
+    } finally {
+        await db.close();
+    }
+}
 module.exports = {
     scrapeNewsBlogs,
-    scrapeBlogDetails
+    scrapeBlogDetails,
+    getNewsBlogsData,
+    getBlogDetailsData
 };

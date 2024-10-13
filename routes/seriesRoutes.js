@@ -1,12 +1,16 @@
 const express = require('express');
 const {
     scrapeSeriesOverview,
-    scrapeSeriesSubRoute
+    scrapeSeriesSubRoute,
+    getSeriesOverview,
+    getSeriesSubRoute
 } = require('../controller/seriesController.js');
 
 const router = express.Router();
-router.get('/:slug/:subSlug', scrapeSeriesOverview);
-router.get("/:slug/:subSlug/:subroute", scrapeSeriesSubRoute)
+router.get('/scrape/:slug/:subSlug', scrapeSeriesOverview);
+router.get("/scrape/:slug/:subSlug/:subroute", scrapeSeriesSubRoute)
+router.get('/:slug/:subSlug', getSeriesOverview);
+router.get("/:slug/:subSlug/:subroute", getSeriesSubRoute)
 
 
 module.exports = router;

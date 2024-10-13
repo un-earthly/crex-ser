@@ -1,10 +1,10 @@
 const { createPage } = require("../utility");
+const { connectDB } = require("../db");  // Assuming you have a db.js file for database connection
 
 async function scrapeShuffledStatsData(url, maxRetries = 3) {
     const page = await createPage();
 
     try {
-
         for (let retry = 0; retry < maxRetries; retry++) {
             try {
                 await page.goto(url, {
@@ -74,6 +74,7 @@ async function scrapeShuffledStatsData(url, maxRetries = 3) {
                     return { tableData, statsCornerData };
                 });
 
+                await saveStatsData(data);
                 return data;
             } catch (error) {
                 console.error(`Attempt ${retry + 1} failed:`, error);
@@ -87,9 +88,81 @@ async function scrapeShuffledStatsData(url, maxRetries = 3) {
         if (error instanceof puppeteer.errors.TimeoutError) {
             console.error('Navigation timed out. Current URL:', page.url());
         }
+    } finally {
+        await page.close();
+    }
+}
+
+async function saveStatsData(statsData) {
+    const db = await connectDB();
+    try {
+        const collection = db.collection('cricketStats');
+        const timestamp = new Date();
+        await collection.insertOne({
+            ...statsData,
+            timestamp
+        });
+        console.log('Stats data saved to MongoDB');
+    } catch (error) {
+        console.error('Error saving stats data to MongoDB:', error);
+        throw error;
+    } finally {
+        await db.close();
+    }
+}
+
+async function getLatestStatsData() {
+    const db = await connectDB();
+    try {
+        const collection = db.collection('cricketStats');
+        const result = await collection.find().sort({ timestamp: -1 }).limit(1).toArray();
+        return result[0];
+    } catch (error) {
+        console.error('Error fetching latest stats data from MongoDB:', error);
+        throw error;
+    } finally {
+        await db.close();
+    }
+}
+
+async function getStatsDataByDateRange(startDate, endDate) {
+    const db = await connectDB();
+    try {
+        const collection = db.collection('cricketStats');
+        const result = await collection.find({
+            timestamp: {
+                $gte: new Date(startDate),
+                $lte: new Date(endDate)
+            }
+        }).toArray();
+        return result;
+    } catch (error) {
+        console.error('Error fetching stats data by date range from MongoDB:', error);
+        throw error;
+    } finally {
+        await db.close();
+    }
+}
+
+async function getPlayerStats(playerName) {
+    const db = await connectDB();
+    try {
+        const collection = db.collection('cricketStats');
+        const result = await collection.find({
+            'tableData.player.name': playerName
+        }).sort({ timestamp: -1 }).limit(1).toArray();
+        return result[0]?.tableData.find(player => player.player.name === playerName);
+    } catch (error) {
+        console.error('Error fetching player stats from MongoDB:', error);
+        throw error;
+    } finally {
+        await db.close();
     }
 }
 
 module.exports = {
-    scrapeShuffledStatsData
-}
+    scrapeShuffledStatsData,
+    getLatestStatsData,
+    getStatsDataByDateRange,
+    getPlayerStats
+};

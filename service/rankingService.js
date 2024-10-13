@@ -1,4 +1,5 @@
 const { createPage } = require("../utility");
+const connectDB = require("../db.config");
 
 async function scrapeRankings(url) {
     const page = await createPage();
@@ -60,6 +61,7 @@ async function scrapeRankings(url) {
 
             return result;
         });
+        await savePlayerRankings(rankings);
 
         return rankings;
     } catch (error) {
@@ -113,7 +115,8 @@ async function scrapeCricketRankings(url) {
             return result;
         });
 
-        
+        await saveTeamRankings(rankings);
+
         return rankings;
     } catch (error) {
         console.error('An error occurred:', error);
@@ -123,8 +126,72 @@ async function scrapeCricketRankings(url) {
         }
     }
 }
+async function savePlayerRankings(rankingsData) {
+    const db = await connectDB();
+    try {
+        const collection = db.collection('playerRankings');
+        await collection.updateOne(
+            { id: 'playerRankings' },
+            { $set: { rankingsData: rankingsData } },
+            { upsert: true }
+        );
+        console.log('Player rankings data saved to MongoDB');
+    } catch (error) {
+        console.error('Error saving player rankings data to MongoDB:', error);
+        throw error;
+    } finally {
+        await db.close();
+    }
+}
 
+async function saveTeamRankings(rankingsData) {
+    const db = await connectDB();
+    try {
+        const collection = db.collection('teamRankings');
+        await collection.updateOne(
+            { id: 'teamRankings' },
+            { $set: { rankingsData: rankingsData } },
+            { upsert: true }
+        );
+        console.log('Team rankings data saved to MongoDB');
+    } catch (error) {
+        console.error('Error saving team rankings data to MongoDB:', error);
+        throw error;
+    } finally {
+        await db.close();
+    }
+}
+
+async function getPlayerRankings() {
+    const db = await connectDB();
+    try {
+        const collection = db.collection('playerRankings');
+        const result = await collection.findOne({ id: 'playerRankings' });
+        return result ? result.rankingsData : null;
+    } catch (error) {
+        console.error('Error fetching player rankings data from MongoDB:', error);
+        throw error;
+    } finally {
+        await db.close();
+    }
+}
+
+async function getTeamRankings() {
+    const db = await connectDB();
+    try {
+        const collection = db.collection('teamRankings');
+        const result = await collection.findOne({ id: 'teamRankings' });
+        return result ? result.rankingsData : null;
+    } catch (error) {
+        console.error('Error fetching team rankings data from MongoDB:', error);
+        throw error;
+    } finally {
+        await db.close();
+    }
+}
 module.exports = {
     scrapeCricketRankings,
-    scrapeRankings
+    scrapeRankings,
+    getPlayerRankings,
+    getTeamRankings
 }

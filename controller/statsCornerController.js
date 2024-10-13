@@ -1,4 +1,4 @@
-const { scrapeShuffledStatsData } = require("../service/statsCornerService");
+const { scrapeShuffledStatsData, getPlayerStats, getLatestStatsData } = require("../service/statsCornerService");
 const { cacheMiddleware } = require("../utility");
 
 const shuffleStatsCorner = async (req, res) => {
@@ -24,7 +24,17 @@ const shuffleStatsCorner = async (req, res) => {
         res.status(500).json({ error: 'Failed to retrieve stats corner data', details: error.message });
     }
 };
+const getshuffleStatsCorner = async (req, res) => {
+    try {
 
+        const data = await getLatestStatsData();
+        res.json(data);
+    } catch (error) {
+        console.error('Error:', error);
+        res.status(500).json({ error: 'Failed to retrieve stats corner data', details: error.message });
+    }
+};
 module.exports = {
-    shuffleStatsCorner: [cacheMiddleware, shuffleStatsCorner]
+    shuffleStatsCorner: [cacheMiddleware, shuffleStatsCorner],
+    getshuffleStatsCorner:[cacheMiddleware, getshuffleStatsCorner]
 };

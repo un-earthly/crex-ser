@@ -1,4 +1,5 @@
 const { createPage } = require("../utility");
+const connectDB = require("../db.config");
 
 async function scrapeNavBarData() {
     const page = await createPage();
@@ -52,7 +53,8 @@ async function scrapeNavBarData() {
             };
         });
 
-        
+        await saveNavBarData(navData);
+
         return navData;
     } catch (error) {
         console.error('An error occurred:', error);
@@ -60,10 +62,44 @@ async function scrapeNavBarData() {
         if (error instanceof puppeteer.errors.TimeoutError) {
             console.error('Navigation timed out. Current URL:', page.url());
         }
+    } finally {
+        await page.close();
+    }
+}
+async function saveNavBarData(navData) {
+    const db = await connectDB();
+    try {
+        const collection = db.collection('navbarData');
+        await collection.updateOne(
+            { id: 'navbar' },
+            { $set: { navData: navData } },
+            { upsert: true }
+        );
+        console.log('Navbar data saved to MongoDB');
+    } catch (error) {
+        console.error('Error saving navbar data to MongoDB:', error);
+        throw error;
+    } finally {
+        await db.close();
+    }
+}
+
+async function getNavBarData() {
+    const db = await connectDB();
+    try {
+        const collection = db.collection('navbarData');
+        const result = await collection.findOne({ id: 'navbar' });
+        return result ? result.navData : null;
+    } catch (error) {
+        console.error('Error fetching navbar data from MongoDB:', error);
+        throw error;
+    } finally {
+        await db.close();
     }
 }
 
 
 module.exports = {
-    scrapeNavBarData
+    scrapeNavBarData,
+    getNavBarData
 }

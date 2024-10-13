@@ -1,4 +1,5 @@
 const { createPage } = require("../utility");
+const connectDB = require("../db.config");
 
 async function seriesScrapper(url) {
     const page = await createPage();
@@ -84,8 +85,13 @@ async function seriesScrapper(url) {
             return data;
         });
 
-        console.log(JSON.stringify(content, null, 2));
-
+        const db = await connectDB();
+        const collection = db.collection('seriesData');
+        await collection.updateOne(
+            { seriesId: url },
+            { $set: { seriesData: content } },
+            { upsert: true }
+        );
         return content;
     } catch (error) {
         console.error('An error occurred:', error);
@@ -93,6 +99,8 @@ async function seriesScrapper(url) {
         if (error instanceof puppeteer.errors.TimeoutError) {
             console.error('Navigation timed out. Current URL:', page.url());
         }
+    } finally {
+        await page.close()
     }
 }
 async function scrapeTeamSquad(url) {
@@ -135,7 +143,13 @@ async function scrapeTeamSquad(url) {
             return teams;
         });
 
-        return squadData;
+        const db = await connectDB();
+        const collection = db.collection('squadData');
+        await collection.updateOne(
+            { seriesid: url },
+            { $set: { squadDataData: squadData } },
+            { upsert: true }
+        );
     } catch (error) {
         console.error('An error occurred:', error);
         console.error('Error stack:', error.stack);
@@ -190,13 +204,23 @@ async function scrapeSeriesInfo(url) {
             };
         });
 
-        return seriesInfo;
+        const db = await connectDB();
+        const collection = db.collection('seriesInfo');
+        await collection.updateOne(
+            { seriesid: url },
+            { $set: { seriesInfoData: seriesInfo } },
+            { upsert: true }
+        );
+        console.log('Navbar data saved to MongoDB');
+        return seriesInfo
     } catch (error) {
         console.error('An error occurred:', error);
         console.error('Error stack:', error.stack);
         if (error instanceof puppeteer.errors.TimeoutError) {
             console.error('Navigation timed out. Current URL:', page.url());
         }
+    } finally {
+        await page.close();
     }
 }
 async function scrapeMatchesInfo(url) {
@@ -248,6 +272,13 @@ async function scrapeMatchesInfo(url) {
                 matchesByDate: matches
             };
         });
+        const db = await connectDB();
+        const collection = db.collection('matchesInfo');
+        await collection.updateOne(
+            { seriesId: url },
+            { $set: { matchesInfo: matchesInfo } },
+            { upsert: true }
+        );
 
         return matchesInfo;
     } catch (error) {
@@ -328,12 +359,21 @@ async function scrapeSeriesStats(url) {
             };
         });
 
-        return {
+        const result = {
             sharedPointsTableInfo,
             seriesStats
         };
 
+        const db = await connectDB();
+        const collection = db.collection('seriesStats');
+        await collection.updateOne(
+            { seriesId: url },
+            { $set: result },
+            { upsert: true }
+        );
 
+
+        return result
     } catch (error) {
         console.error('An error occurred:', error);
         console.error('Error stack:', error.stack);
@@ -382,6 +422,15 @@ async function scrapePointsTable(url) {
             };
         });
 
+        const db = await connectDB();
+        const collection = db.collection('pointsTable');
+        await collection.updateOne(
+            { seriesId: url },
+            { $set: { pointsTableInfo: pointsTableInfo } },
+            { upsert: true }
+        );
+
+        console.log('Points table info saved to MongoDB');
         return pointsTableInfo;
     } catch (error) {
         console.error('An error occurred:', error);
@@ -430,7 +479,15 @@ async function scrapeSeriesNews(url) {
             };
         });
 
+        const db = await connectDB();
+        const collection = db.collection('seriesNews');
+        await collection.updateOne(
+            { seriesId: url },
+            { $set: { newsWrapper: newsWrapper } },
+            { upsert: true }
+        );
 
+        console.log('Series news saved to MongoDB');
         return newsWrapper;
     } catch (error) {
         console.error('An error occurred:', error);
@@ -441,6 +498,94 @@ async function scrapeSeriesNews(url) {
     }
 }
 
+async function getSeriesData(seriesId) {
+    const db = await connectDB();
+    const collection = db.collection('seriesData');
+    return await collection.findOne({ seriesId });
+}
+
+async function getSquadData(seriesId) {
+    const db = await connectDB();
+    const collection = db.collection('squadData');
+    return await collection.findOne({ seriesId });
+}
+
+async function getSeriesInfo(seriesId) {
+    const db = await connectDB();
+    const collection = db.collection('seriesInfo');
+    return await collection.findOne({ seriesId });
+}
+
+async function getMatchesInfo(seriesId) {
+    const db = await connectDB();
+    const collection = db.collection('matchesInfo');
+    return await collection.findOne({ seriesId });
+}
+
+async function getSeriesStats(seriesId) {
+    const db = await connectDB();
+    const collection = db.collection('seriesStats');
+    return await collection.findOne({ seriesId });
+}
+
+async function getPointsTable(seriesId) {
+    const db = await connectDB();
+    const collection = db.collection('pointsTable');
+    return await collection.findOne({ seriesId });
+}
+
+async function getSeriesNews(seriesId) {
+    const db = await connectDB();
+    const collection = db.collection('seriesNews');
+    return await collection.findOne({ seriesId });
+}
+
+// Function to get all data for a series
+async function getAllSeriesData(seriesId) {
+    const [
+        seriesData,
+        squadData,
+        seriesInfo,
+        matchesInfo,
+        seriesStats,
+        pointsTable,
+        seriesNews
+    ] = await Promise.all([
+        getSeriesData(seriesId),
+        getSquadData(seriesId),
+        getSeriesInfo(seriesId),
+        getMatchesInfo(seriesId),
+        getSeriesStats(seriesId),
+        getPointsTable(seriesId),
+        getSeriesNews(seriesId)
+    ]);
+
+    return {
+        seriesData,
+        squadData,
+        seriesInfo,
+        matchesInfo,
+        seriesStats,
+        pointsTable,
+        seriesNews
+    };
+}
+
+// Function to get the latest series
+async function getLatestSeries(limit = 5) {
+    const db = await connectDB();
+    const collection = db.collection('seriesInfo');
+    return await collection.find().sort({ _id: -1 }).limit(limit).toArray();
+}
+
+// Function to search series by name
+async function searchSeriesByName(searchTerm) {
+    const db = await connectDB();
+    const collection = db.collection('seriesInfo');
+    return await collection.find(
+        { 'seriesInfoData.title': { $regex: searchTerm, $options: 'i' } }
+    ).toArray();
+}
 
 
 module.exports = {
@@ -450,6 +595,15 @@ module.exports = {
     scrapeSeriesInfo,
     scrapeSeriesStats,
     scrapeTeamSquad,
-    scrapeSeriesNews
-
+    scrapeSeriesNews,
+    getSeriesData,
+    getSquadData,
+    getSeriesInfo,
+    getMatchesInfo,
+    getSeriesStats,
+    getPointsTable,
+    getSeriesNews,
+    getAllSeriesData,
+    getLatestSeries,
+    searchSeriesByName
 }
