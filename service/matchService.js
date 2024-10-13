@@ -39,16 +39,7 @@ async function scrapeCommentary(url, limit) {
 
         return commentary;
     } catch (error) {
-        // if (error instanceof TimeoutError) {
-        //     console.error('Timeout while scraping commentary:', error);
-            throw new Error('Scraping timed out. The page might be slow to load.');
-        // } else if (error.name === 'NetworkError') {
-        //     console.error('Network error while scraping commentary:', error);
-        //     throw new Error('Network issue encountered. Please check your connection.');
-        // } else {
-        //     console.error('Error scraping commentary:', error);
-        //     throw new Error('An unexpected error occurred while scraping commentary.');
-        // }
+        throw new Error('Scraping timed out. The page might be slow to load.');
     } finally {
         await page.close();
     }
