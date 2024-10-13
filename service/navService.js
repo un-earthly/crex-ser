@@ -59,9 +59,6 @@ async function scrapeNavBarData() {
     } catch (error) {
         console.error('An error occurred:', error);
         console.error('Error stack:', error.stack);
-        if (error instanceof puppeteer.errors.TimeoutError) {
-            console.error('Navigation timed out. Current URL:', page.url());
-        }
     } finally {
         await page.close();
     }
@@ -79,8 +76,6 @@ async function saveNavBarData(navData) {
     } catch (error) {
         console.error('Error saving navbar data to MongoDB:', error);
         throw error;
-    } finally {
-        await db.close();
     }
 }
 
@@ -93,8 +88,6 @@ async function getNavBarData() {
     } catch (error) {
         console.error('Error fetching navbar data from MongoDB:', error);
         throw error;
-    } finally {
-        await db.close();
     }
 }
 

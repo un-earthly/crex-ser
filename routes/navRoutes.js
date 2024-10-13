@@ -5,7 +5,7 @@ const {
 } = require('../controller/navbarController.js');
 const router = express.Router();
 
-router.get('/scrape', scrapeNavBarDataController);
+router.post('/scraper', scrapeNavBarDataController);
 router.get('/', getNavBarDataController);
 
 module.exports = router;

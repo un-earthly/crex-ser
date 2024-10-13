@@ -49,9 +49,7 @@ async function scrapePlayerLayoutData(url) {
     } catch (error) {
         console.error('An error occurred:', error);
         console.error('Error stack:', error.stack);
-        if (error instanceof puppeteer.errors.TimeoutError) {
-            console.error('Navigation timed out. Current URL:', page.url());
-        }
+
     } finally {
         await page.close();
     }
@@ -70,8 +68,6 @@ async function savePlayerData(playerData) {
     } catch (error) {
         console.error('Error saving player data to MongoDB:', error);
         throw error;
-    } finally {
-        await db.close();
     }
 }
 
@@ -84,8 +80,6 @@ async function getPlayerData(firstName, lastName) {
     } catch (error) {
         console.error('Error fetching player data from MongoDB:', error);
         throw error;
-    } finally {
-        await db.close();
     }
 }
 
@@ -98,8 +92,6 @@ async function getAllPlayers() {
     } catch (error) {
         console.error('Error fetching all player data from MongoDB:', error);
         throw error;
-    } finally {
-        await db.close();
     }
 }
 
@@ -112,8 +104,6 @@ async function getPlayersByTeam(teamName) {
     } catch (error) {
         console.error('Error fetching player data by team from MongoDB:', error);
         throw error;
-    } finally {
-        await db.close();
     }
 }
 module.exports = {

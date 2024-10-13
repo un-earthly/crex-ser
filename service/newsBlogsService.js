@@ -1,3 +1,4 @@
+const connectDB = require("../db.config");
 const { createPage } = require("../utility");
 const scrapeNewsBlogs = async (clicks = 0) => {
     const page = await createPage();
@@ -105,8 +106,6 @@ async function saveNewsBlogsData(data) {
     } catch (error) {
         console.error('Error saving news blogs data to MongoDB:', error);
         throw error;
-    } finally {
-        await db.close();
     }
 }
 
@@ -119,24 +118,45 @@ async function saveBlogDetailsData(blogDetails) {
     } catch (error) {
         console.error('Error saving blog details to MongoDB:', error);
         throw error;
-    } finally {
-        await db.close();
     }
 }
 
-async function getNewsBlogsData() {
+async function getNewsBlogsData(clicks) {
     const db = await connectDB();
     try {
         const collection = db.collection('newsBlogs');
         const result = await collection.findOne({ id: 'newsBlogs' });
-        return result ? result.data : null;
+
+        if (result && result.data) {
+            const data = result.data;
+
+            // Calculate how many data items to return
+            const itemsToReturn = Math.min(data.length, clicks * 3);
+
+            // Create an array to hold the result
+            const output = [];
+
+            for (let i = 0; i < clicks; i++) {
+                // Push 3 items from data for each click
+                for (let j = 0; j < 3; j++) {
+                    if (output.length < itemsToReturn) {
+                        output.push(data[(i * 3) + j]);
+                    } else {
+                        break; // Stop if we've reached the limit
+                    }
+                }
+            }
+
+            return output;
+        }
+
+        return null;
     } catch (error) {
         console.error('Error fetching news blogs data from MongoDB:', error);
         throw error;
-    } finally {
-        await db.close();
     }
 }
+
 
 async function getBlogDetailsData() {
     const db = await connectDB();
@@ -146,8 +166,6 @@ async function getBlogDetailsData() {
     } catch (error) {
         console.error('Error fetching blog details from MongoDB:', error);
         throw error;
-    } finally {
-        await db.close();
     }
 }
 module.exports = {

@@ -1,8 +1,8 @@
 const {
     scrapeCricketRankings,
     scrapeRankings,
-    getCricketRankings,
-    getRankings
+    getPlayerRankings,
+    getTeamRankings
 } = require('../service/rankingService.js');
 const { cacheMiddleware } = require('../utility/cache.js');
 const scrapeRankingsController = async (req, res) => {
@@ -47,12 +47,12 @@ const getRankingsController = async (req, res) => {
         case 'women':
             switch (cat.toLowerCase()) {
                 case 'teams':
-                    scrapeFunction = getCricketRankings;
+                    scrapeFunction = getTeamRankings;
                     break;
                 case 'batter':
                 case 'bowler':
                 case 'allrounder':
-                    scrapeFunction = getRankings;
+                    scrapeFunction = getPlayerRankings;
                     break;
                 default:
                     return res.status(400).send('Invalid category');

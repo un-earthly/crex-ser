@@ -6,11 +6,12 @@ let browser;
 async function getBrowserInstance() {
     if (!browser) {
         browser = await puppeteer.launch({
-            args: chromium.args,
-            defaultViewport: chromium.defaultViewport,
-            executablePath: await chromium.executablePath(),
-            headless: chromium.headless,
-            ignoreHTTPSErrors: true,
+            executablePath: '/home/scorp39/.nix-profile/bin/chromium', // or the path to your installed Chromium
+            headless: true,
+            args: [
+                '--no-sandbox', // add this option
+                '--disable-setuid-sandbox' // add this option
+            ]
         });
     }
     return browser;

@@ -1,4 +1,4 @@
-const { scrapeNavBarData } = require("../service/navService");
+const { scrapeNavBarData, getNavBarData } = require("../service/navService");
 const { cacheMiddleware } = require("../utility");
 
 

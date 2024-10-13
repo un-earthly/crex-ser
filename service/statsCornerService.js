@@ -1,5 +1,5 @@
 const { createPage } = require("../utility");
-const { connectDB } = require("../db");  // Assuming you have a db.js file for database connection
+const connectDB = require("../db.config");
 
 async function scrapeShuffledStatsData(url, maxRetries = 3) {
     const page = await createPage();
@@ -85,9 +85,7 @@ async function scrapeShuffledStatsData(url, maxRetries = 3) {
     } catch (error) {
         console.error('An error occurred:', error);
         console.error('Error stack:', error.stack);
-        if (error instanceof puppeteer.errors.TimeoutError) {
-            console.error('Navigation timed out. Current URL:', page.url());
-        }
+
     } finally {
         await page.close();
     }
@@ -106,8 +104,6 @@ async function saveStatsData(statsData) {
     } catch (error) {
         console.error('Error saving stats data to MongoDB:', error);
         throw error;
-    } finally {
-        await db.close();
     }
 }
 
@@ -120,8 +116,6 @@ async function getLatestStatsData() {
     } catch (error) {
         console.error('Error fetching latest stats data from MongoDB:', error);
         throw error;
-    } finally {
-        await db.close();
     }
 }
 
@@ -139,8 +133,6 @@ async function getStatsDataByDateRange(startDate, endDate) {
     } catch (error) {
         console.error('Error fetching stats data by date range from MongoDB:', error);
         throw error;
-    } finally {
-        await db.close();
     }
 }
 
@@ -155,8 +147,6 @@ async function getPlayerStats(playerName) {
     } catch (error) {
         console.error('Error fetching player stats from MongoDB:', error);
         throw error;
-    } finally {
-        await db.close();
     }
 }
 

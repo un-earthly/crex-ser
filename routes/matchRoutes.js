@@ -12,10 +12,10 @@ const {
 
 const router = express.Router();
 // Scraping routes (POST)
-router.post('/scraper/all', scrapeAllMatches);
-router.post('/scraper/layout/:param1/:param2/:param3/:param4/:param5/:param6', scraperMatchLayout);
-router.post('/scraper/com/:param1/:param2/:param3/:param4/:param5/:param6/:limit', scrapeCommentaryController);
-router.post("/scraper/scoreboard/:param1/:param2/:param3/:param4/:param5/:param6/:sub", scrapeMatchInfoController);
+router.post('/scrapper/all', scrapeAllMatches);
+router.post('/scrapper/layout/:param1/:param2/:param3/:param4/:param5/:param6', scraperMatchLayout);
+router.post('/scrapper/com/:param1/:param2/:param3/:param4/:param5/:param6/:limit', scrapeCommentaryController);
+router.post("/scrapper/scoreboard/:param1/:param2/:param3/:param4/:param5/:param6/:sub", scrapeMatchInfoController);
 
 // Database retrieval routes (GET)
 router.get('/all', getAllMatches);

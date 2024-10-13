@@ -39,16 +39,16 @@ async function scrapeCommentary(url, limit) {
 
         return commentary;
     } catch (error) {
-        if (error instanceof TimeoutError) {
-            console.error('Timeout while scraping commentary:', error);
+        // if (error instanceof TimeoutError) {
+        //     console.error('Timeout while scraping commentary:', error);
             throw new Error('Scraping timed out. The page might be slow to load.');
-        } else if (error.name === 'NetworkError') {
-            console.error('Network error while scraping commentary:', error);
-            throw new Error('Network issue encountered. Please check your connection.');
-        } else {
-            console.error('Error scraping commentary:', error);
-            throw new Error('An unexpected error occurred while scraping commentary.');
-        }
+        // } else if (error.name === 'NetworkError') {
+        //     console.error('Network error while scraping commentary:', error);
+        //     throw new Error('Network issue encountered. Please check your connection.');
+        // } else {
+        //     console.error('Error scraping commentary:', error);
+        //     throw new Error('An unexpected error occurred while scraping commentary.');
+        // }
     } finally {
         await page.close();
     }
@@ -93,7 +93,7 @@ const scrapeMatchDetailsLayout = async (url) => {
         { $set: { layoutData: result } },
         { upsert: true }
     );
-
+    console.log("saved matchLayout in db");
     return result;
 };
 
@@ -767,8 +767,6 @@ async function getCommentary(matchId, limit) {
     } catch (error) {
         console.error('Error fetching commentary:', error);
         throw error;
-    } finally {
-        await db.close();
     }
 }
 
@@ -781,8 +779,6 @@ async function getMatchLayout(matchId) {
     } catch (error) {
         console.error('Error fetching match layout:', error);
         throw error;
-    } finally {
-        await db.close();
     }
 }
 
@@ -795,8 +791,6 @@ async function getScorecardInfo(matchId) {
     } catch (error) {
         console.error('Error fetching scorecard info:', error);
         throw error;
-    } finally {
-        await db.close();
     }
 }
 
@@ -809,8 +803,6 @@ async function getAllMatches() {
     } catch (error) {
         console.error('Error fetching all matches:', error);
         throw error;
-    } finally {
-        await db.close();
     }
 }
 
@@ -823,8 +815,6 @@ async function getLiveMatchInfo(matchId) {
     } catch (error) {
         console.error('Error fetching live match info:', error);
         throw error;
-    } finally {
-        await db.close();
     }
 }
 
@@ -837,8 +827,6 @@ async function getMatchInfoDetails(matchId) {
     } catch (error) {
         console.error('Error fetching match info details:', error);
         throw error;
-    } finally {
-        await db.close();
     }
 }
 

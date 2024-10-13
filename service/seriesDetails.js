@@ -96,9 +96,7 @@ async function seriesScrapper(url) {
     } catch (error) {
         console.error('An error occurred:', error);
         console.error('Error stack:', error.stack);
-        if (error instanceof puppeteer.errors.TimeoutError) {
-            console.error('Navigation timed out. Current URL:', page.url());
-        }
+
     } finally {
         await page.close()
     }
@@ -150,12 +148,11 @@ async function scrapeTeamSquad(url) {
             { $set: { squadDataData: squadData } },
             { upsert: true }
         );
+        return squadData
     } catch (error) {
         console.error('An error occurred:', error);
         console.error('Error stack:', error.stack);
-        if (error instanceof puppeteer.errors.TimeoutError) {
-            console.error('Navigation timed out. Current URL:', page.url());
-        }
+
     }
 }
 async function scrapeSeriesInfo(url) {
@@ -216,9 +213,7 @@ async function scrapeSeriesInfo(url) {
     } catch (error) {
         console.error('An error occurred:', error);
         console.error('Error stack:', error.stack);
-        if (error instanceof puppeteer.errors.TimeoutError) {
-            console.error('Navigation timed out. Current URL:', page.url());
-        }
+
     } finally {
         await page.close();
     }
@@ -284,9 +279,7 @@ async function scrapeMatchesInfo(url) {
     } catch (error) {
         console.error('An error occurred:', error);
         console.error('Error stack:', error.stack);
-        if (error instanceof puppeteer.errors.TimeoutError) {
-            console.error('Navigation timed out. Current URL:', page.url());
-        }
+
     }
 };
 
@@ -377,9 +370,7 @@ async function scrapeSeriesStats(url) {
     } catch (error) {
         console.error('An error occurred:', error);
         console.error('Error stack:', error.stack);
-        if (error instanceof puppeteer.errors.TimeoutError) {
-            console.error('Navigation timed out. Current URL:', page.url());
-        }
+
     }
 }
 
@@ -435,9 +426,7 @@ async function scrapePointsTable(url) {
     } catch (error) {
         console.error('An error occurred:', error);
         console.error('Error stack:', error.stack);
-        if (error instanceof puppeteer.errors.TimeoutError) {
-            console.error('Navigation timed out. Current URL:', page.url());
-        }
+
     }
 }
 async function scrapeSeriesNews(url) {
@@ -492,9 +481,7 @@ async function scrapeSeriesNews(url) {
     } catch (error) {
         console.error('An error occurred:', error);
         console.error('Error stack:', error.stack);
-        if (error instanceof puppeteer.errors.TimeoutError) {
-            console.error('Navigation timed out. Current URL:', page.url());
-        }
+
     }
 }
 
@@ -504,22 +491,26 @@ async function getSeriesData(seriesId) {
     return await collection.findOne({ seriesId });
 }
 
-async function getSquadData(seriesId) {
+async function getSquadData(seriesid) {
     const db = await connectDB();
     const collection = db.collection('squadData');
-    return await collection.findOne({ seriesId });
+    const data = await collection.findOne({ seriesid });
+    return data.squadDataData
 }
 
-async function getSeriesInfo(seriesId) {
+async function getSeriesInfo(seriesid) {
     const db = await connectDB();
     const collection = db.collection('seriesInfo');
-    return await collection.findOne({ seriesId });
+    const data = await collection.findOne({ seriesid });
+    return data.seriesInfoData
 }
 
 async function getMatchesInfo(seriesId) {
     const db = await connectDB();
     const collection = db.collection('matchesInfo');
-    return await collection.findOne({ seriesId });
+    const data = await collection.findOne({ seriesId });
+    return data.matchesInfo
+
 }
 
 async function getSeriesStats(seriesId) {
@@ -528,20 +519,21 @@ async function getSeriesStats(seriesId) {
     return await collection.findOne({ seriesId });
 }
 
-async function getPointsTable(seriesId) {
+async function getPointsTable(seriesid) {
     const db = await connectDB();
     const collection = db.collection('pointsTable');
-    return await collection.findOne({ seriesId });
+    return await collection.findOne({ seriesid });
 }
 
 async function getSeriesNews(seriesId) {
     const db = await connectDB();
     const collection = db.collection('seriesNews');
-    return await collection.findOne({ seriesId });
+    const data = await collection.findOne({ seriesId })
+    return data.newsWrapper;
 }
 
 // Function to get all data for a series
-async function getAllSeriesData(seriesId) {
+async function getAllSeriesData(seriesid) {
     const [
         seriesData,
         squadData,
@@ -551,13 +543,13 @@ async function getAllSeriesData(seriesId) {
         pointsTable,
         seriesNews
     ] = await Promise.all([
-        getSeriesData(seriesId),
-        getSquadData(seriesId),
-        getSeriesInfo(seriesId),
-        getMatchesInfo(seriesId),
-        getSeriesStats(seriesId),
-        getPointsTable(seriesId),
-        getSeriesNews(seriesId)
+        getSeriesData(seriesid),
+        getSquadData(seriesid),
+        getSeriesInfo(seriesid),
+        getMatchesInfo(seriesid),
+        getSeriesStats(seriesid),
+        getPointsTable(seriesid),
+        getSeriesNews(seriesid)
     ]);
 
     return {

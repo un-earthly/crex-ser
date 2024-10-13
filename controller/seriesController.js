@@ -1,5 +1,5 @@
 
-const { seriesScrapper, scrapeSeriesInfo, scrapeSeriesNews, scrapeSeriesStats, scrapePointsTable, scrapeTeamSquad, scrapeMatchesInfo, getSeriesInfo, getSeriesNews, getSeriesStats, getPointsTable, getMatchesInfo } = require('../service/seriesDetails');
+const { seriesScrapper, scrapeSeriesInfo, scrapeSeriesNews, scrapeSeriesStats, scrapePointsTable, scrapeTeamSquad, scrapeMatchesInfo, getSeriesInfo, getSeriesNews, getSeriesStats, getPointsTable, getMatchesInfo, getSquadData } = require('../service/seriesDetails');
 const { cacheMiddleware } = require('../utility');
 
 

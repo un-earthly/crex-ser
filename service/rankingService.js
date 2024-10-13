@@ -61,15 +61,13 @@ async function scrapeRankings(url) {
 
             return result;
         });
-        await savePlayerRankings(rankings);
+        await savePlayerRankings(rankings, url);
 
         return rankings;
     } catch (error) {
         console.error('An error occurred:', error);
         console.error('Error stack:', error.stack);
-        if (error instanceof puppeteer.errors.TimeoutError) {
-            console.error('Navigation timed out. Current URL:', page.url());
-        }
+
     }
 }
 
@@ -86,19 +84,19 @@ async function scrapeCricketRankings(url) {
             const result = {};
 
             tabContainers.forEach((container) => {
-                const tabName = container.querySelector('.type').textContent.trim();
-                const topTeam = container.querySelector('.team_full_name').textContent.trim();
-                const topTeamRating = container.querySelector('.number').textContent.trim();
-                const topTeamImg = container.querySelector('.flag').src
+                const tabName = container.querySelector('.type')?.textContent.trim();
+                const topTeam = container.querySelector('.team_full_name')?.textContent.trim();
+                const topTeamRating = container.querySelector('.number')?.textContent.trim();
+                const topTeamImg = container.querySelector('.flag')?.src
 
-                const tableRows = container.querySelectorAll('table tbody tr');
-                const teamsData = Array.from(tableRows).map((row) => {
-                    const columns = row.querySelectorAll('td');
+                const tableRows = container?.querySelectorAll('table tbody tr');
+                const teamsData = Array?.from(tableRows)?.map((row) => {
+                    const columns = row?.querySelectorAll('td');
                     return {
-                        rank: columns[0].textContent.trim(),
-                        team: columns[1].querySelector('.t_name').textContent.trim(),
-                        flag: columns[1].querySelector('img').src,
-                        rating: columns[2].textContent.trim(),
+                        rank: columns[0]?.textContent.trim(),
+                        team: columns[1]?.querySelector('.t_name')?.textContent.trim(),
+                        flag: columns[1]?.querySelector('img')?.src,
+                        rating: columns[2]?.textContent.trim(),
                     };
                 });
 
@@ -115,23 +113,21 @@ async function scrapeCricketRankings(url) {
             return result;
         });
 
-        await saveTeamRankings(rankings);
+        await saveTeamRankings(rankings, url);
 
         return rankings;
     } catch (error) {
         console.error('An error occurred:', error);
         console.error('Error stack:', error.stack);
-        if (error instanceof puppeteer.errors.TimeoutError) {
-            console.error('Navigation timed out. Current URL:', page.url());
-        }
+
     }
 }
-async function savePlayerRankings(rankingsData) {
+async function savePlayerRankings(rankingsData, id) {
     const db = await connectDB();
     try {
         const collection = db.collection('playerRankings');
         await collection.updateOne(
-            { id: 'playerRankings' },
+            { id },
             { $set: { rankingsData: rankingsData } },
             { upsert: true }
         );
@@ -139,17 +135,15 @@ async function savePlayerRankings(rankingsData) {
     } catch (error) {
         console.error('Error saving player rankings data to MongoDB:', error);
         throw error;
-    } finally {
-        await db.close();
     }
 }
 
-async function saveTeamRankings(rankingsData) {
+async function saveTeamRankings(rankingsData, id) {
     const db = await connectDB();
     try {
         const collection = db.collection('teamRankings');
         await collection.updateOne(
-            { id: 'teamRankings' },
+            { id },
             { $set: { rankingsData: rankingsData } },
             { upsert: true }
         );
@@ -157,41 +151,35 @@ async function saveTeamRankings(rankingsData) {
     } catch (error) {
         console.error('Error saving team rankings data to MongoDB:', error);
         throw error;
-    } finally {
-        await db.close();
     }
 }
 
-async function getPlayerRankings() {
+async function getPlayerRankings(id) {
     const db = await connectDB();
     try {
         const collection = db.collection('playerRankings');
-        const result = await collection.findOne({ id: 'playerRankings' });
+        const result = await collection.findOne({ id });
         return result ? result.rankingsData : null;
     } catch (error) {
         console.error('Error fetching player rankings data from MongoDB:', error);
         throw error;
-    } finally {
-        await db.close();
     }
 }
 
-async function getTeamRankings() {
+async function getTeamRankings(id) {
     const db = await connectDB();
     try {
         const collection = db.collection('teamRankings');
-        const result = await collection.findOne({ id: 'teamRankings' });
+        const result = await collection.findOne({ id });
         return result ? result.rankingsData : null;
     } catch (error) {
         console.error('Error fetching team rankings data from MongoDB:', error);
         throw error;
-    } finally {
-        await db.close();
     }
 }
 module.exports = {
     scrapeCricketRankings,
     scrapeRankings,
     getPlayerRankings,
-    getTeamRankings
+    getTeamRankings,
 }

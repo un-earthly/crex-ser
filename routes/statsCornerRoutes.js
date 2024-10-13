@@ -5,7 +5,7 @@ const {
 } = require('../controller/statsCornerController');
 const router = express.Router();
 
-router.get('/scrape/suffle', shuffleStatsCorner);
+router.post('/scraper/suffle', shuffleStatsCorner);
 router.get('/suffle', getshuffleStatsCorner);
 
 module.exports = router;

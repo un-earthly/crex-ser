@@ -47,7 +47,14 @@ async function scrapeFixtureMatches(pageOffset = 0) {
 
             return result;
         });
-
+        const db = await connectDB();
+        const collection = db.collection('fixtures');
+        await collection.updateOne(
+            { id: 'fixtures' },
+            { $set: { data: matchesByDate } },
+            { upsert: true }
+        );
+        console.log('Fixtures data saved to MongoDB');
         return matchesByDate;
     } catch (e) {
         console.error('Error fetching matches:', e);
@@ -87,11 +94,18 @@ async function scrapeAndSaveSeries(url, pageOffset = 0) {
             return series;
         });
 
+        const db = await connectDB();
+        const collection = db.collection('series');
+        await collection.updateOne(
+            { id: 'series' },
+            { $set: { data: seriesData } },
+            { upsert: true }
+        );
+        console.log('series data saved to MongoDB');
         return {
             seriesData,
-            message: `${seriesData.length} series were successfully scraped.`
-        };
-
+            message: "successfully retrived data"
+        }
     } catch (error) {
         console.error('Error during scraping or database operation:', error);
         throw error;
@@ -118,12 +132,8 @@ async function getFixtures(page = 1, pageSize = 10, dateRange = null) {
             .limit(pageSize)
             .toArray();
 
-        return {
-            fixtures,
-            totalFixtures,
-            currentPage: page,
-            totalPages: Math.ceil(totalFixtures / pageSize)
-        };
+        return fixtures[0].data
+
     } catch (error) {
         console.error('Error retrieving fixtures from database:', error);
         throw error;
@@ -144,19 +154,13 @@ async function getSeries(page = 1, pageSize = 10, searchTerm = '') {
             query.name = { $regex: searchTerm, $options: 'i' };
         }
 
-        const totalSeries = await seriesCollection.countDocuments(query);
-        const series = await seriesCollection.find(query)
+        const seriesData = await seriesCollection.find(query)
             .sort({ month: -1, name: 1 })
             .skip((page - 1) * pageSize)
             .limit(pageSize)
             .toArray();
 
-        return {
-            series,
-            totalSeries,
-            currentPage: page,
-            totalPages: Math.ceil(totalSeries / pageSize)
-        };
+        return { seriesData: seriesData[0].data }
     } catch (error) {
         console.error('Error retrieving series from database:', error);
         throw error;
