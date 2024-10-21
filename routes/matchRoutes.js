@@ -7,17 +7,16 @@ const {
     getMatchLayout,
     getCommentary,
     getMatchInfo,
-    getAllMatches
+    getAllMatches,
+    getLiveMatchScores
 } = require('../controller/matchController');
 
 const router = express.Router();
-// Scraping routes (POST)
 router.post('/scrapper/all', scrapeAllMatches);
 router.post('/scrapper/layout/:param1/:param2/:param3/:param4/:param5/:param6', scraperMatchLayout);
 router.post('/scrapper/com/:param1/:param2/:param3/:param4/:param5/:param6/:limit', scrapeCommentaryController);
 router.post("/scrapper/scoreboard/:param1/:param2/:param3/:param4/:param5/:param6/:sub", scrapeMatchInfoController);
 
-// Database retrieval routes (GET)
 router.get('/all', getAllMatches);
 router.get('/layout/:param1/:param2/:param3/:param4/:param5/:param6', getMatchLayout);
 router.get('/com/:param1/:param2/:param3/:param4/:param5/:param6/:limit', getCommentary);

@@ -12,6 +12,8 @@ const rankingRoutes = require('./routes/rankingRoutes');
 const playerRoutes = require('./routes/playerRoutes');
 const navRoutes = require('./routes/navRoutes');
 const { closeBrowser } = require('./utility');
+const cron = require('node-cron');
+const fetchAndStoreMatches = require('./jobs/matchesListScrapper');
 
 config();
 app.use(cors())
@@ -27,6 +29,28 @@ app.use('/api/stats-corner', statsRoutes);
 app.use('/api/player-profile', playerRoutes);
 app.use('/api/nav', navRoutes);
 
+async function runFetchAndStoreMatches() {
+    try {
+        const { uniqueMatchLinks, uniqueSeriesLinks } = await fetchAndStoreMatches();
+        return {
+            data:
+            {
+                uniqueMatchLinks,
+                uniqueSeriesLinks
+            }
+        }
+    } catch (error) {
+        console.error('Failed to fetch and store matches:', error);
+    }
+}
+cron.schedule('0 0 * * *', async () => {
+    try {
+        const matchLinks = await runFetchAndStoreMatches();
+        console.log(`Cron job completed. Fetched and stored ${matchLinks.length} match links.`);
+    } catch (error) {
+        console.error('Cron job failed:', error);
+    }
+});
 
 app.use((err, req, res, next) => {
     console.error(err.stack);
@@ -37,7 +61,6 @@ const server = app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });
 
-// Graceful shutdown
 process.on('SIGINT', async () => {
     console.log('Shutting down server...');
     await closeBrowser();

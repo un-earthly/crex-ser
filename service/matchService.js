@@ -820,7 +820,9 @@ async function getMatchInfoDetails(matchId) {
         throw error;
     }
 }
-
+async function fetchLiveMatchScores() {
+    return { score: null }
+}
 module.exports = {
     scrapeCommentary,
     scrapeMatchDetailsLayout,
@@ -833,5 +835,6 @@ module.exports = {
     getScorecardInfo,
     getAllMatches,
     getLiveMatchInfo,
-    getMatchInfoDetails
+    getMatchInfoDetails,
+    fetchLiveMatchScores
 }

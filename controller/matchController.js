@@ -11,6 +11,7 @@ const {
     getScorecardInfo,
     getMatchInfoDetails,
     getLiveMatchInfo,
+    fetchLiveMatchScores
 
 } = require("../service/matchService");
 const { cacheMiddleware } = require("../utility");
@@ -113,6 +114,7 @@ async function getMatchInfoController(req, res) {
     const { param1, param2, param3, param4, param5, param6, sub } = req.params;
 
     const url = `${process.env.BASE}/scoreboard/${param1}/${param2}/${param3}/${param4}/${param5}/${param6}/${sub}`;
+    console.log(url)
     try {
         let data;
         switch (sub) {
@@ -151,7 +153,10 @@ async function getAllMatchesController(req, res) {
     }
 }
 
-
+async function getLiveMatchScoresController() {
+    const liveMatchScores = await fetchLiveMatchScores();
+    return liveMatchScores;
+}
 module.exports = {
     scraperMatchLayout: [cacheMiddleware, scraperMatchLayout],
     scrapeCommentaryController: [cacheMiddleware, scrapeCommentaryController],
@@ -160,5 +165,6 @@ module.exports = {
     getMatchLayout: [cacheMiddleware, getMatchLayoutController],
     getCommentary: [cacheMiddleware, getCommentaryController],
     getMatchInfo: [cacheMiddleware, getMatchInfoController],
-    getAllMatches: [cacheMiddleware, getAllMatchesController]
+    getAllMatches: [cacheMiddleware, getAllMatchesController],
+    getLiveMatchScores: [() => { }, getLiveMatchScoresController]
 };
