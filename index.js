@@ -43,14 +43,14 @@ app.use('/api/nav', navRoutes);
         console.error('Failed to fetch and store matches:', error);
     }
 })()
-// cron.schedule('0 0 * * *', async () => {
-//     try {
-//         const matchLinks = await runFetchAndStoreMatches();
-//         console.log(`Cron job completed. Fetched and stored ${matchLinks.length} match links.`);
-//     } catch (error) {
-//         console.error('Cron job failed:', error);
-//     }
-// });
+cron.schedule('0 0 * * *', async () => {
+    try {
+        const matchLinks = await runFetchAndStoreMatches();
+        console.log(`Cron job completed. Fetched and stored ${matchLinks.length} match links.`);
+    } catch (error) {
+        console.error('Cron job failed:', error);
+    }
+});
 
 app.use((err, req, res, next) => {
     console.error(err.stack);
