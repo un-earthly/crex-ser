@@ -5,14 +5,24 @@ let browser;
 
 async function getBrowserInstance() {
     if (!browser) {
-        browser = await puppeteer.launch({
-            executablePath: '/home/scorp39/.nix-profile/bin/chromium', // or the path to your installed Chromium
-            headless: true,
-            args: [
-                '--no-sandbox', // add this option
-                '--disable-setuid-sandbox' // add this option
-            ]
-        });
+        if (process.env.BROWSER === nix) {
+            browser = await puppeteer.launch({
+                executablePath: '/home/scorp39/.nix-profile/bin/chromium',
+                headless: true,
+                args: [
+                    '--no-sandbox', 
+                    '--disable-setuid-sandbox'
+                ]
+            });
+        } else {
+            browser = await puppeteer.launch({
+                args: chromium.args,
+                defaultViewport: chromium.defaultViewport,
+                executablePath: await chromium.executablePath(),
+                headless: chromium.headless,
+                ignoreHTTPSErrors: true,
+            });
+        }
     }
     return browser;
 }
