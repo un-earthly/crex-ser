@@ -468,7 +468,6 @@ async function scrapeMatchInfoDetails(url) {
         await page.waitForSelector(".info-container", { visible: true });
         await page.waitForSelector(".live-score-card", { visible: true });
         await page.waitForSelector(".content-wrap", { visible: true })
-        await page.waitForSelector(".team-header-card", { visible: true });
         await page.waitForSelector(".table-responsive", { visible: true });
         await page.waitForSelector(".global-card-wrap", { visible: true });
         const matchDetails = await page.evaluate(() => {

@@ -29,7 +29,7 @@ app.use('/api/stats-corner', statsRoutes);
 app.use('/api/player-profile', playerRoutes);
 app.use('/api/nav', navRoutes);
 
-async function runFetchAndStoreMatches() {
+(async function runFetchAndStoreMatches() {
     try {
         const { uniqueMatchLinks, uniqueSeriesLinks } = await fetchAndStoreMatches();
         return {
@@ -42,15 +42,15 @@ async function runFetchAndStoreMatches() {
     } catch (error) {
         console.error('Failed to fetch and store matches:', error);
     }
-}
-cron.schedule('0 0 * * *', async () => {
-    try {
-        const matchLinks = await runFetchAndStoreMatches();
-        console.log(`Cron job completed. Fetched and stored ${matchLinks.length} match links.`);
-    } catch (error) {
-        console.error('Cron job failed:', error);
-    }
-});
+})()
+// cron.schedule('0 0 * * *', async () => {
+//     try {
+//         const matchLinks = await runFetchAndStoreMatches();
+//         console.log(`Cron job completed. Fetched and stored ${matchLinks.length} match links.`);
+//     } catch (error) {
+//         console.error('Cron job failed:', error);
+//     }
+// });
 
 app.use((err, req, res, next) => {
     console.error(err.stack);
