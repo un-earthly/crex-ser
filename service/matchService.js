@@ -1,21 +1,22 @@
 const connectDB = require("../db.config");
 const { createPage, navigateAndWait, scrapingMiddleware } = require("../utility");
 
-async function scrapeCommentary(url, limit) {
+async function scrapeCommentary(url) {
     const page = await createPage();
     try {
         await navigateAndWait(page, url);
 
         let commentary = [];
+        let hasNewData = true; // Flag to track if new data is loaded
 
-        for (let i = 0; i < limit; i++) {
+        for (let i = 0; i < 1000; i++) {
+            // Scroll down to load more commentary
             await page.evaluate(() => {
                 window.scrollTo(0, document.body.scrollHeight);
             });
 
-            await new Promise(resolve => setTimeout(resolve, 500));
-
-            const newCommentary = await scrapingMiddleware(page, '.cm-b-roundcard', async () => {
+            // Use a promise with a timeout to check for new commentary
+            const newCommentaryPromise = scrapingMiddleware(page, '.cm-b-roundcard', async () => {
                 return page.evaluate(() => {
                     const roundcards = document.querySelectorAll('.cm-b-roundcard');
                     return Array.from(roundcards).map(card => ({
@@ -26,7 +27,22 @@ async function scrapeCommentary(url, limit) {
                     }));
                 });
             });
-            commentary = [...commentary, ...newCommentary];
+
+            const timeoutPromise = new Promise(resolve => setTimeout(() => resolve([]), 1000)); // Timeout after 1 second
+
+            const newCommentary = await Promise.race([newCommentaryPromise, timeoutPromise]);
+
+            // Check if new commentary was loaded
+            if (newCommentary.length > 0) {
+                commentary = [...commentary, ...newCommentary];
+                hasNewData = true; // Reset the flag if new data is found
+            } else if (hasNewData) {
+                // If no new data was found after having loaded some, exit the loop
+                break;
+            }
+
+            // Small delay to allow for page to load more content
+            await new Promise(resolve => setTimeout(resolve, 500));
         }
 
         const db = await connectDB();
@@ -44,6 +60,7 @@ async function scrapeCommentary(url, limit) {
         await page.close();
     }
 }
+
 const scrapeMatchDetailsLayout = async (url) => {
     const page = await createPage();
 

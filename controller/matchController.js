@@ -58,10 +58,10 @@ async function scraperMatchLayout(req, res) {
     }
 }
 async function scrapeCommentaryController(req, res) {
-    const { param1, param2, param3, param4, param5, param6, limit } = req.params;
+    const { param1, param2, param3, param4, param5, param6 } = req.params;
     const url = `${process.env.BASE}/scoreboard/${param1}/${param2}/${param3}/${param4}/${param5}/${param6}/live`;
     try {
-        const commentaryData = await scrapeCommentary(url, limit);
+        const commentaryData = await scrapeCommentary(url);
         res.json(commentaryData);
     } catch (error) {
         console.error('Error occurred while fetching commentary:', error);
