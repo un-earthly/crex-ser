@@ -85,7 +85,7 @@ const rankingRoutes = require('./routes/rankingRoutes');
 const playerRoutes = require('./routes/playerRoutes');
 const navRoutes = require('./routes/navRoutes');
 const { closeBrowser } = require('./utility');
-const handleMatchListScraping = require('./jobs/matchListScrapper_');
+// const handleMatchListScraping = require('./jobs/matchListScrapper_');
 // const { initializeScrapers, errorTracker, executeAllScrapers } = require("./jobs");
 
 const app = express();
@@ -201,10 +201,6 @@ async function startServer() {
             console.log(`Environment: ${config.env}`);
             console.log(`MongoDB: ${config.mongodb.uri.split('@')[1]}`);
         });
-        await handleMatchListScraping()
-        // Initialize scrapers
-        // await initializeScrapers();
-        // console.log('Scrapers initialized successfully');
 
         // Graceful shutdown handler
         async function handleShutdown(signal) {

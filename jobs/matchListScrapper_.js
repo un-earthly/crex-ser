@@ -1,154 +1,215 @@
+const fs = require('fs/promises');
+const { createReadStream, createWriteStream } = require('fs');
+const readline = require('readline');
+const path = require('path');
+const os = require('os');
 const connectDB = require("../db.config");
-const { createPage } = require("../utility");
-const axios = require("axios");
+const logger = require('../logger');
 
-// Process API calls for a single match
-async function processMatchAPIs(href, baseServer) {
-    const endpoints = [
-        { type: 'commentary', path: `/api/match/scrapper/com${href}` },
-        { type: 'live scoreboard', path: `/api/match/scrapper/scoreboard${href}/live` },
-        { type: 'scorecard', path: `/api/match/scrapper/scoreboard${href}/scorecard` },
-        { type: 'match info', path: `/api/match/scrapper/scoreboard${href}/info` }
-    ];
+const { createPage } = require('../utility/page');
 
-    for (const endpoint of endpoints) {
-        console.log(`Fetching ${endpoint.type}...`);
-        await axios.post(`${baseServer}${endpoint.path}`);
-    }
-}
+// Constants
+const BATCH_SIZE = 1; 
+const WAIT_TIME = 3000;
+const DUMP_DIR = path.join(os.tmpdir(), 'scraper-dumps');
 
-// Scrape matches from a series page
-async function scrapMatchListFromSeries(seriesLink, base) {
-    const page = await createPage();
-    try {
-        await page.goto(base + seriesLink + "/matches", { waitUntil: 'networkidle0' });
+// Browser management
+let browser = null;
+let activePage = null;
 
-        const links = await page.evaluate(() => {
-            return Array.from(document.querySelectorAll('a'))
-                .map(a => a.href.replace("https://crex.live", ""))
-                .filter(href => href.includes('/scoreboard'));
-        });
-
-        return links;
-    } catch (error) {
-        console.error(`Error scraping series ${seriesLink}:`, error.message);
-        return [];
-    } finally {
-        await page.close();
-    }
-}
-
-// Main scraping handler
-async function handleMatchListScraping() {
-    let db;
-    let mainPage;
-    const processedLinks = new Set();
-    const failedLinks = new Set();
-
-    try {
-        // Initialize database and browser
-        db = await connectDB();
-        mainPage = await createPage();
-        const base = process.env.BASE;
-
-        // Navigate to main page
-        await mainPage.goto(base, { waitUntil: 'networkidle0' });
-
-        // Extract initial links
-        const { seriesList, matchList } = await mainPage.evaluate(() => {
-            const matchLinks = [];
-            const seriesLinks = [];
-
-            Array.from(document.querySelectorAll('a'))
-                .map(a => a.href.replace("https://crex.live", ""))
-                .filter(href => href.includes('/scoreboard') || href.includes('/series'))
-                .forEach(link => {
-                    if (link.includes('/scoreboard')) {
-                        matchLinks.push(link);
-                    } else {
-                        seriesLinks.push(link);
-                    }
-                });
-
-            return { seriesList: seriesLinks, matchList: matchLinks };
-        });
-
-        // Scrape matches from series pages
-        console.log(`Scraping ${seriesList.length} series pages...`);
-        const seriesMatchLinks = await Promise.all(
-            seriesList.map(link => scrapMatchListFromSeries(link, base))
-        );
-
-        // Combine and deduplicate all match links
-        const uniqueMatchLinks = new Set(matchList);
-        seriesMatchLinks.flat().forEach(link => uniqueMatchLinks.add(link));
-
-        // Prepare links for processing
-        const existingMatchLinks = await db.collection('matchLinks').find({}).toArray();
-        const existingHrefs = new Set(existingMatchLinks.map(linkObj => linkObj.href));
-
-        const linksToInsert = Array.from(uniqueMatchLinks)
-            .map(link => link.split("/").slice(0, -1).join("/"))
-            .filter(link => !existingHrefs.has(link))
-            .map(link => ({
-                href: link,
-                createdAt: new Date()
-            }));
-
-        if (linksToInsert.length === 0) {
-            console.log("No new links to process.");
-            return;
+async function cleanup() {
+    if (activePage) {
+        try {
+            await activePage.close();
+        } catch (error) {
+            console.error('Error closing page:', error);
         }
+        activePage = null;
+    }
+    if (browser) {
+        try {
+            await browser.close();
+        } catch (error) {
+            console.error('Error closing browser:', error);
+        }
+        browser = null;
+    }
+    if (global.gc) {
+        global.gc();
+    }
+}
 
-        // Process each link sequentially
-        console.log(`Processing ${linksToInsert.length} new links...`);
-        for (let i = 0; i < linksToInsert.length; i++) {
-            const { href } = linksToInsert[i];
-            console.log(`\nProcessing link ${i + 1}/${linksToInsert.length}: ${href}`);
+async function processSeriesAPIs() {
+    const keys = ['', 'news', 'info', 'series-stats', 'points-table', 'team-squad', 'matches']
 
-            try {
-                await processMatchAPIs(href, process.env.BASE_SERVER);
-                processedLinks.add(href);
+}
+async function processMatchAPIs() {
+    const keys = ['','live','scorecard','info']
+ }
 
-                // Insert successful link immediately
-                await db.collection('matchLinks').insertOne({
-                    href,
-                    createdAt: new Date(),
-                    processedAt: new Date()
+async function writeLinksToFile(links, filename) {
+    const filepath = path.join(DUMP_DIR, filename);
+    const stream = createWriteStream(filepath);
+
+    for (const link of links) {
+        await new Promise((resolve, reject) => {
+            stream.write(`${link}\n`, error => {
+                if (error) reject(error);
+                else resolve();
+            });
+        });
+    }
+
+    await new Promise(resolve => stream.end(resolve));
+    return filepath;
+}
+
+async function* readLinksFromFile(filepath) {
+    const fileStream = createReadStream(filepath);
+    const rl = readline.createInterface({
+        input: fileStream,
+        crlfDelay: Infinity
+    });
+
+    for await (const line of rl) {
+        if (line.trim()) {
+            yield line.trim();
+            await new Promise(resolve => setTimeout(resolve, 100)); 
+        }
+    }
+}
+
+async function scrapeLinks(baseUrl, type = 'series') {
+    const links = [];
+    let retryCount = 0;
+    const maxRetries = 3;
+
+    while (retryCount < maxRetries) {
+        try {
+            if (!activePage) {
+                activePage = await createPage();
+            }
+
+            await activePage.goto(baseUrl, {
+                waitUntil: 'networkidle0',
+                timeout: 30000
+            });
+
+            const pageLinks = await activePage.evaluate((type) => {
+                return Array.from(document.querySelectorAll('a'))
+                    .map(a => a.href.replace("https://crex.live", ""))
+                    .filter(href => href.includes(`/${type}`));
+            }, type);
+
+            links.push(...pageLinks);
+            await cleanup();
+            break;
+
+        } catch (error) {
+            retryCount++;
+            await logger.logError(error, `Scraping attempt ${retryCount} failed`);
+            await cleanup();
+
+            if (retryCount === maxRetries) {
+                throw new Error(`Failed to scrape after ${maxRetries} attempts`);
+            }
+
+            await new Promise(resolve => setTimeout(resolve, retryCount * 5000));
+        }
+    }
+
+    return links;
+}
+
+async function processLink(link, processor) {
+    try {
+        await processor(link);
+        await logger.logSuccess(`Processed: ${link}`);
+        return { success: true };
+    } catch (error) {
+        await logger.logError(error, `Failed to process: ${link}`);
+        return { success: false, error: error.message };
+    }
+}
+
+async function handleMatchListScraping() {
+    try {
+        await fs.mkdir(DUMP_DIR, { recursive: true });
+        await logger.initialize();
+        const db = await connectDB();
+        const base = process.env.BASE;
+        const baseServer = process.env.BASE_SERVER;
+
+        // Process series
+        await logger.logSection('Scraping Series');
+        const seriesLinks = await scrapeLinks(base, 'series');
+        const seriesFile = await writeLinksToFile(seriesLinks, `series_${Date.now()}.txt`);
+
+        let processedSeries = 0;
+        let failedSeries = 0;
+
+        for await (const link of readLinksFromFile(seriesFile)) {
+            const exists = await db.collection('seriesLinks').findOne({ href: link });
+            if (!exists) {
+                const result = await processLink(link, async (l) => {
+                    await processSeriesAPIs(l, baseServer);
+                    await db.collection('seriesLinks').insertOne({
+                        href: l,
+                        createdAt: new Date()
+                    });
                 });
 
-                console.log(`✓ Successfully processed and saved link: ${href}`);
+                if (result.success) processedSeries++;
+                else failedSeries++;
 
-                // Add delay between requests
-                if (i < linksToInsert.length - 1) {
-                    await new Promise(resolve => setTimeout(resolve, 1000));
-                }
-            } catch (error) {
-                failedLinks.add({ href, error: error.message });
-                console.error(`✗ Failed to process link: ${href}`);
-                console.error(`Error details: ${error.message}`);
+                await new Promise(resolve => setTimeout(resolve, WAIT_TIME));
             }
         }
 
+        // Process matches
+        await logger.logSection('Scraping Matches');
+        const matchLinks = await scrapeLinks(base, 'scoreboard');
+        const matchFile = await writeLinksToFile(matchLinks, `matches_${Date.now()}.txt`);
+
+        let processedMatches = 0;
+        let failedMatches = 0;
+
+        for await (const link of readLinksFromFile(matchFile)) {
+            const matchLink = link.split("/").slice(0, -1).join("/");
+            const exists = await db.collection('matchLinks').findOne({ href: matchLink });
+
+            if (!exists) {
+                const result = await processLink(matchLink, async (l) => {
+                    await processMatchAPIs(l, baseServer);
+                    await db.collection('matchLinks').insertOne({
+                        href: l,
+                        createdAt: new Date()
+                    });
+                });
+
+                if (result.success) processedMatches++;
+                else failedMatches++;
+
+                await new Promise(resolve => setTimeout(resolve, WAIT_TIME));
+            }
+        }
+
+        // Cleanup and summary
+        await cleanup();
+        await fs.rm(DUMP_DIR, { recursive: true, force: true });
+
+        await logger.logSection('Final Summary');
+        await logger.logSummary(
+            processedSeries + processedMatches,
+            failedSeries + failedMatches,
+            []
+        );
+
     } catch (error) {
-        console.error("Fatal error in scraping process:", error);
+        await logger.logError(error, 'Fatal error in scraping process');
         throw error;
     } finally {
-        // Clean up resources
-        if (mainPage) await mainPage.close();
-
-        // Print final summary
-        console.log("\nScraping Process Summary:");
-        console.log(`- Total links processed: ${processedLinks.size + failedLinks.size}`);
-        console.log(`- Successfully processed: ${processedLinks.size}`);
-        console.log(`- Failed: ${failedLinks.size}`);
-
-        if (failedLinks.size > 0) {
-            console.log("\nFailed Links:");
-            failedLinks.forEach(({ href, error }) => {
-                console.log(`- ${href}: ${error}`);
-            });
-        }
+        await cleanup();
     }
 }
 
