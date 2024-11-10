@@ -8,11 +8,19 @@ async function getBrowserInstance() {
         if (process.env.BROWSER === "nix") {
             browser = await puppeteer.launch({
                 executablePath: '/home/scorp39/.nix-profile/bin/chromium',
-                headless: true,
+                headless: false,
                 args: [
-                    '--no-sandbox', 
-                    '--disable-setuid-sandbox'
-                ]
+                    '--no-sandbox',
+                    '--disable-setuid-sandbox',
+                    '--disable-dev-shm-usage',
+                    '--disable-accelerated-2d-canvas',
+                    '--disable-gpu',
+                    '--window-size=1920x1080',
+                ],
+                defaultViewport: {
+                    width: 1920,
+                    height: 1080
+                }
             });
         } else {
             browser = await puppeteer.launch({

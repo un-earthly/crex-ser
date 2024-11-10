@@ -1,77 +1,39 @@
-// const express = require('express');
-// const cors = require('cors');
-// const app = express();
-// const PORT = process.env.PORT || 5000;
-// const { config } = require('dotenv');
-// const newsRoutes = require('./routes/newsRoutes');
-// const statsRoutes = require('./routes/statsCornerRoutes');
-// const matchRoutes = require('./routes/matchRoutes');
-// const seriesDetailsRoutes = require('./routes/seriesRoutes');
-// const fixturesRoutes = require('./routes/fixtureRoutes');
-// const rankingRoutes = require('./routes/rankingRoutes');
-// const playerRoutes = require('./routes/playerRoutes');
-// const navRoutes = require('./routes/navRoutes');
-// const { closeBrowser } = require('./utility');
-// const cron = require('node-cron');
-// const fetchAndStoreMatches = require('./jobs/matchesListScrapper');
-// const { initializeScrapers } = require('./jobs/scheduledScrapers');
+/**
+ * Express.js Server for Cricket Data API
+ * --------------------------------------
+ * This server provides a RESTful API for cricket-related data including news, 
+ * rankings, fixtures, series details, match information, and player profiles.
+ * 
+ * Core Features:
+ * - Web scraping automation with scheduled jobs
+ * - Rate limiting and API key authentication
+ * - Health monitoring and status reporting
+ * - CORS support and error tracking
+ * 
+ * Main API Endpoints:
+ * - /api/rankings        - Cricket rankings data
+ * - /api/fixtures        - Match fixtures and schedules
+ * - /api/series         - Series information
+ * - /api/news-blogs     - Cricket news and blogs
+ * - /api/match          - Match information
+ * - /api/stats-corner   - Cricket statistics
+ * - /api/player-profile - Player profiles
+ * - /api/nav           - Navigation data
+ * 
+ * System Endpoints:
+ * - /api/scraper-status  - Scraping status
+ * - /api/health         - Server health metrics
+ * - /api/trigger-scrape - Manual scrape trigger
+ * 
+ * Requirements:
+ * - MongoDB connection
+ * - Environment configuration
+ * - API key for system endpoints
+ * 
+ * @author MD Alamin
+ * @version 1.0
+ */
 
-// config();
-// app.use(cors())
-// app.use(express.json())
-
-
-// app.use('/api/rankings', rankingRoutes);
-// app.use('/api/fixtures', fixturesRoutes);
-// app.use("/api/series", seriesDetailsRoutes)
-// app.use('/api/news-blogs', newsRoutes);
-// app.use('/api/match', matchRoutes);
-// app.use('/api/stats-corner', statsRoutes);
-// app.use('/api/player-profile', playerRoutes);
-// app.use('/api/nav', navRoutes);
-
-// (async function runFetchAndStoreMatches() {
-//     try {
-//         const { uniqueMatchLinks, uniqueSeriesLinks } = await fetchAndStoreMatches();
-//         return {
-//             data:
-//             {
-//                 uniqueMatchLinks,
-//                 uniqueSeriesLinks
-//             }
-//         }
-//     } catch (error) {
-//         console.error('Failed to fetch and store matches:', error);
-//     }
-// })()
-// cron.schedule('0 0 * * *', async () => {
-//     try {
-//         const matchLinks = await runFetchAndStoreMatches();
-//         console.log(`Cron job completed. Fetched and stored ${matchLinks.length} match links.`);
-//     } catch (error) {
-//         console.error('Cron job failed:', error);
-//     }
-// });
-
-// app.use((err, req, res, next) => {
-//     console.error(err.stack);
-//     res.status(500).send('Something broke!');
-// });
-
-// const server = app.listen(PORT, () => {
-//     console.log(`Server running on port ${PORT}`);
-// });
-
-// process.on('SIGINT', async () => {
-//     console.log('Shutting down server...');
-//     await closeBrowser();
-//     server.close(() => {
-//         console.log('Server shut down');
-//         process.exit(0);
-//     });
-// });
-
-// server.js
 const express = require('express');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
@@ -85,23 +47,19 @@ const rankingRoutes = require('./routes/rankingRoutes');
 const playerRoutes = require('./routes/playerRoutes');
 const navRoutes = require('./routes/navRoutes');
 const { closeBrowser } = require('./utility');
-// const handleMatchListScraping = require('./jobs/matchListScrapper_');
-// const { initializeScrapers, errorTracker, executeAllScrapers } = require("./jobs");
+require("./jobs/newsScraper");
 
 const app = express();
 
-// Rate limiting
 const limiter = rateLimit({
     windowMs: config.security.rateLimits.windowMs,
     max: config.security.rateLimits.max
 });
 
-// Middleware setup
 app.use(cors(config.cors));
 app.use(express.json());
 app.use(limiter);
 
-// Request tracking middleware
 let serverStartTime;
 const healthStats = {
     uptimeSeconds: () => Math.floor((Date.now() - serverStartTime) / 1000),
@@ -130,7 +88,6 @@ app.use((req, res, next) => {
     next();
 });
 
-// Routes
 app.use('/api/rankings', rankingRoutes);
 app.use('/api/fixtures', fixturesRoutes);
 app.use("/api/series", seriesDetailsRoutes);
@@ -140,7 +97,6 @@ app.use('/api/stats-corner', statsRoutes);
 app.use('/api/player-profile', playerRoutes);
 app.use('/api/nav', navRoutes);
 
-// Admin routes with API key protection
 const validateApiKey = (req, res, next) => {
     const apiKey = req.headers['x-api-key'];
     if (apiKey !== config.security.apiKey) {
@@ -175,7 +131,7 @@ app.post('/api/trigger-scrape', validateApiKey, async (req, res) => {
     }
 });
 
-// Error handling middleware
+
 app.use((err, req, res, next) => {
     console.error('Error:', err);
 
@@ -192,7 +148,7 @@ app.use((err, req, res, next) => {
     });
 });
 
-// Server initialization
+
 async function startServer() {
     try {
         const server = app.listen(config.port, () => {
@@ -202,7 +158,6 @@ async function startServer() {
             console.log(`MongoDB: ${config.mongodb.uri.split('@')[1]}`);
         });
 
-        // Graceful shutdown handler
         async function handleShutdown(signal) {
             console.log(`\n${signal} received. Initiating graceful shutdown...`);
 
@@ -225,7 +180,6 @@ async function startServer() {
             }
         }
 
-        // Process handlers
         process.on('SIGTERM', () => handleShutdown('SIGTERM'));
         process.on('SIGINT', () => handleShutdown('SIGINT'));
         process.on('unhandledRejection', (reason, promise) => {

@@ -1,32 +1,69 @@
-const { default: axios } = require("axios");
+const cron = require('node-cron');
+const fs = require('fs');
+const path = require('path');
+const { scrapeNewsBlogs } = require('../service/newsBlogsService');
 
-async function fetchAndStoreNews() {
-    const page = await createPage();
-    const db = await connectDB();
-    try {
-        // Scrape main news
-        await axios.post(`${process.env.BASE_SERVER}/api/news-blogs/scraper`);
 
-        // Get existing news links to scrape individual blog details
-        const newsCollection = db.collection('newsBlogs');
-        const newsData = await newsCollection.findOne({ id: 'newsBlogs' });
-
-        if (newsData && newsData.data) {
-            for (const news of newsData.data) {
-                if (news.link) {
-                    const [cat, slug, id] = news.link.split('/').filter(Boolean);
-                    try {
-                        await axios.post(`${process.env.BASE_SERVER}/api/news-blogs/scraper/${cat}/${slug}/${id}`);
-                        console.log(`Fetched blog details for ${news.link}`);
-                    } catch (error) {
-                        console.error(`Error fetching blog details for ${news.link}:`, error.message);
-                    }
-                }
-            }
-        }
-    } catch (error) {
-        console.error('Error in news scraper:', error);
-    } finally {
-        await page.close();
-    }
+// Create logs directory if it doesn't exist
+const logsDir = path.join(__dirname, 'logs');
+if (!fs.existsSync(logsDir)) {
+    fs.mkdirSync(logsDir);
 }
+
+// Logger function
+const logMessage = (message, isError = false) => {
+    const timestamp = new Date().toISOString();
+    const logFile = path.join(logsDir, `scraper-${new Date().toISOString().split('T')[0]}.log`);
+    const logEntry = `${timestamp} - ${message}\n`;
+
+    console.log(logEntry);
+    fs.appendFileSync(logFile, logEntry);
+
+    if (isError) {
+        const errorFile = path.join(logsDir, `errors-${new Date().toISOString().split('T')[0]}.log`);
+        fs.appendFileSync(errorFile, logEntry);
+    }
+};
+
+// Function to run the scraper
+const runScraper = async () => {
+    try {
+        logMessage('Starting news blog scraping...');
+
+        // You can adjust the number of clicks as needed
+        const results = await scrapeNewsBlogs();
+
+        logMessage(`Scraping completed successfully. Processed ${results.length} blogs.`);
+
+        // Optional: Log some statistics
+        const blogsWithDetails = results.filter(blog => blog.details).length;
+        logMessage(`Blogs with details: ${blogsWithDetails}/${results.length}`);
+
+    } catch (error) {
+        logMessage(`Scraping failed: ${error.message}`, true);
+        logMessage(`Stack trace: ${error.stack}`, true);
+    }
+};
+
+cron.schedule('0 * * * *', async () => {
+    logMessage('Initiating scheduled scraping task');
+    await runScraper();
+});
+
+
+// Handle process termination gracefully
+process.on('SIGINT', () => {
+    logMessage('Scraper process terminated');
+    process.exit();
+});
+
+process.on('uncaughtException', (error) => {
+    logMessage(`Uncaught Exception: ${error.message}`, true);
+    logMessage(`Stack trace: ${error.stack}`, true);
+    process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    logMessage(`Unhandled Rejection at: ${promise}, reason: ${reason}`, true);
+    process.exit(1);
+});
