@@ -48,6 +48,7 @@ const playerRoutes = require('./routes/playerRoutes');
 const navRoutes = require('./routes/navRoutes');
 const { closeBrowser } = require('./utility');
 require("./jobs/newsScraper");
+require("./jobs/navbarScraper");
 
 const app = express();
 

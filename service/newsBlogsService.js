@@ -1,7 +1,6 @@
 const connectDB = require("../db.config");
 const { createPage } = require("../utility");
 
-// Convert relative time to actual timestamp
 const convertRelativeTimeToTimestamp = (relativeTime) => {
     const now = new Date();
     const matches = relativeTime.match(/(\d+)\s*(\w+)\s*ago/);
@@ -89,10 +88,9 @@ const scrapeNewsBlogs = async (clicks = 0) => {
 
                 if (title && link) {
                     cards.push({
-                        _id: link.substring(1),
                         title,
                         imageUrl,
-                        link,
+                        matchUrl: link.substring(1),
                         tags,
                         description,
                         relativeTime
@@ -103,19 +101,16 @@ const scrapeNewsBlogs = async (clicks = 0) => {
             return cards;
         });
 
-        // Process each blog with actual timestamps
         const processedData = data.map(blog => ({
             ...blog,
             createdAt: convertRelativeTimeToTimestamp(blog.relativeTime),
             displayTime: blog.relativeTime // Keep the display format
         }));
 
-        // Sort by createdAt timestamp
         const sortedData = processedData.sort((a, b) => b.createdAt - a.createdAt);
 
         await saveNewsBlogsData(sortedData);
 
-        // Scrape details in parallel with concurrency limit
         const concurrencyLimit = 3;
         const detailedBlogs = [];
 
@@ -124,13 +119,13 @@ const scrapeNewsBlogs = async (clicks = 0) => {
             const batchResults = await Promise.all(
                 batch.map(async (blog) => {
                     try {
-                        const existingDetails = await checkBlogDetailsExists(blog._id);
+                        const existingDetails = await checkBlogDetailsExists(blog.matchUrl);
                         if (existingDetails) {
                             return { ...blog, details: existingDetails };
                         }
 
                         if (blog.link) {
-                            const details = await scrapeBlogDetails(blog._id, blog.link);
+                            const details = await scrapeBlogDetails(blog.matchUrl, blog.link);
                             return { ...blog, details };
                         }
                         return blog;
@@ -141,7 +136,7 @@ const scrapeNewsBlogs = async (clicks = 0) => {
                 })
             );
             detailedBlogs.push(...batchResults);
-            await new Promise(resolve => setTimeout(resolve, 1000)); // Rate limiting
+            await new Promise(resolve => setTimeout(resolve, 1000));
         }
 
         return detailedBlogs;
@@ -157,7 +152,6 @@ const scrapeNewsBlogs = async (clicks = 0) => {
 const scrapeBlogDetails = async (blogId, blogUrl) => {
     const page = await createPage();
     try {
-        // Set headers and configurations
         await Promise.all([
             page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'),
             page.setViewport({ width: 1920, height: 1080, deviceScaleFactor: 1 }),
@@ -207,7 +201,8 @@ const scrapeBlogDetails = async (blogId, blogUrl) => {
                 return null;
             }).filter(Boolean);
 
-            const tags = Array.from(document.querySelectorAll('.tags')).map(e => e.innerText.split("\n"))
+            const tags = Array.from(document.querySelectorAll('.tags a')).map(tag => tag.innerText);
+
 
             const wordCount = content
                 .filter(item => item.type === 'paragraph')
@@ -226,7 +221,7 @@ const scrapeBlogDetails = async (blogId, blogUrl) => {
         });
 
         const detailsWithId = {
-            _id: blogId,
+            matchUrl: blogId,
             ...blogDetails,
             updatedAt: new Date()
         };
@@ -241,23 +236,22 @@ const scrapeBlogDetails = async (blogId, blogUrl) => {
     }
 };
 
-// Optimized database operations
 const saveNewsBlogsData = async (blogs) => {
     const db = await connectDB();
     try {
         const collection = db.collection('newsBlogs');
         const operations = await Promise.all(blogs.map(async (blog) => {
-            const existingBlog = await collection.findOne({ _id: blog._id });
+            const existingBlog = await collection.findOne({ matchUrl: blog.matchUrl });
 
             if (existingBlog) {
                 const { createdAt: oldCreatedAt } = existingBlog;
                 return {
                     updateOne: {
-                        filter: { _id: blog._id },
+                        filter: { matchUrl: blog.matchUrl },
                         update: {
                             $set: {
                                 ...blog,
-                                createdAt: oldCreatedAt, // Preserve original creation time
+                                createdAt: oldCreatedAt,
                                 updatedAt: new Date()
                             }
                         }
@@ -284,7 +278,6 @@ const saveNewsBlogsData = async (blogs) => {
     }
 };
 
-// Optimized queries
 const getNewsBlogsData = async (clicks) => {
     const db = await connectDB();
     try {
@@ -304,7 +297,7 @@ const getBlogDetailsData = async (id) => {
     const db = await connectDB();
     try {
         const collection = db.collection('blogDetails');
-        return await collection.findOne({ _id: id });
+        return await collection.findOne({ matchUrl: id });
     } catch (error) {
         console.error('Error fetching blog details:', error);
         throw error;
@@ -315,7 +308,7 @@ const checkBlogDetailsExists = async (blogId) => {
     const db = await connectDB();
     try {
         const collection = db.collection('blogDetails');
-        return await collection.findOne({ _id: blogId });
+        return await collection.findOne({ matchUrl: blogId });
     } catch (error) {
         console.error('Error checking blog existence:', error);
         return null;
@@ -327,7 +320,7 @@ const saveBlogDetailsData = async (blogDetails) => {
     try {
         const collection = db.collection('blogDetails');
         await collection.updateOne(
-            { matchUrl: blogDetails._id },
+            { matchUrl: blogDetails.matchUrl },
             {
                 $set: blogDetails,
                 $setOnInsert: { createdAt: new Date() }

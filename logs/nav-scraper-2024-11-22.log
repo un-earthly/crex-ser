@@ -1,0 +1,84 @@
+2024-11-22T02:57:31.085Z - Initiating scheduled navigation scraping...
+2024-11-22T02:57:31.428Z - Starting navigation bar scraping...
+2024-11-22T02:57:38.179Z - Navigation data verified - no changes needed
+2024-11-22T02:57:38.179Z - Navigation data processing completed
+2024-11-22T02:57:38.193Z - Scheduled navigation scraping completed successfully
+2024-11-22T02:58:02.393Z - Initiating scheduled navigation scraping...
+2024-11-22T02:58:02.744Z - Starting navigation bar scraping...
+2024-11-22T02:58:03.572Z - Initiating scheduled navigation scraping...
+2024-11-22T02:58:03.921Z - Starting navigation bar scraping...
+2024-11-22T02:58:07.182Z - Initiating scheduled navigation scraping...
+2024-11-22T02:58:07.522Z - Starting navigation bar scraping...
+2024-11-22T02:58:14.310Z - Navigation data verified - no changes needed
+2024-11-22T02:58:14.310Z - Navigation data processing completed
+2024-11-22T02:58:14.327Z - Scheduled navigation scraping completed successfully
+2024-11-22T02:59:14.005Z - Initiating scheduled navigation scraping...
+2024-11-22T02:59:14.006Z - Navigation scraper cron job initialized successfully
+2024-11-22T02:59:14.386Z - Starting navigation bar scraping...
+2024-11-22T02:59:21.228Z - Navigation data verified - no changes needed
+2024-11-22T02:59:21.228Z - Navigation data processing completed
+2024-11-22T02:59:21.243Z - Scheduled navigation scraping completed successfully in 7238ms
+2024-11-22T02:59:35.702Z - Initiating scheduled navigation scraping...
+2024-11-22T02:59:35.703Z - Navigation scraper cron job initialized successfully
+2024-11-22T02:59:36.054Z - Starting navigation bar scraping...
+2024-11-22T02:59:37.168Z - Initiating scheduled navigation scraping...
+2024-11-22T02:59:37.170Z - Navigation scraper cron job initialized successfully
+2024-11-22T02:59:37.505Z - Starting navigation bar scraping...
+2024-11-22T02:59:42.500Z - Initiating scheduled navigation scraping...
+2024-11-22T02:59:42.501Z - Navigation scraper cron job initialized successfully
+2024-11-22T02:59:42.868Z - Starting navigation bar scraping...
+2024-11-22T02:59:43.958Z - Initiating scheduled navigation scraping...
+2024-11-22T02:59:43.959Z - Navigation scraper cron job initialized successfully
+2024-11-22T02:59:44.306Z - Starting navigation bar scraping...
+2024-11-22T03:00:06.133Z - Initiating scheduled navigation scraping...
+2024-11-22T03:00:06.134Z - Navigation scraper cron job initialized successfully
+2024-11-22T03:00:06.486Z - Starting navigation bar scraping...
+2024-11-22T03:00:13.266Z - Navigation data verified - no changes needed
+2024-11-22T03:00:13.266Z - Navigation data processing completed
+2024-11-22T03:00:13.281Z - Scheduled navigation scraping completed successfully in 7148ms
+2024-11-22T03:00:25.144Z - Initiating scheduled navigation scraping...
+2024-11-22T03:00:25.146Z - Navigation scraper cron job initialized successfully
+2024-11-22T03:00:25.485Z - Starting navigation bar scraping...
+2024-11-22T03:00:36.267Z - Navigation data verified - no changes needed
+2024-11-22T03:00:36.267Z - Navigation data processing completed
+2024-11-22T03:00:36.286Z - Scheduled navigation scraping completed successfully in 11142ms
+2024-11-22T03:02:02.731Z - Navigation scraper cron job initialized successfully
+2024-11-22T03:02:04.033Z - Navigation scraper cron job initialized successfully
+2024-11-22T03:02:06.884Z - Navigation scraper cron job initialized successfully
+2024-11-22T03:02:09.300Z - Navigation scraper cron job initialized successfully
+2024-11-22T03:02:12.544Z - Navigation scraper cron job initialized successfully
+2024-11-22T03:02:13.853Z - Navigation scraper cron job initialized successfully
+2024-11-22T03:03:15.510Z - Navigation scraper cron job initialized successfully
+2024-11-22T03:03:18.069Z - Navigation scraper cron job initialized successfully
+2024-11-22T03:03:20.855Z - Navigation scraper cron job initialized successfully
+2024-11-22T03:03:23.260Z - Navigation scraper cron job initialized successfully
+2024-11-22T03:03:28.610Z - Navigation scraper cron job initialized successfully
+2024-11-22T03:03:31.000Z - Navigation scraper cron job initialized successfully
+2024-11-22T03:03:32.911Z - Navigation scraper cron job initialized successfully
+2024-11-22T03:03:34.953Z - Navigation scraper cron job initialized successfully
+2024-11-22T03:03:37.991Z - Navigation scraper cron job initialized successfully
+2024-11-22T03:03:40.307Z - Navigation scraper cron job initialized successfully
+2024-11-22T03:03:42.852Z - Navigation scraper cron job initialized successfully
+2024-11-22T03:04:09.162Z - Navigation scraper cron job initialized successfully
+2024-11-22T03:04:09.163Z - Uncaught Exception: Route.get() requires a callback function but got a [object Object]
+2024-11-22T03:04:09.163Z - Stack trace: Error: Route.get() requires a callback function but got a [object Object]
+    at Route.<computed> [as get] (/home/scorp39/programmes/crex-ser/node_modules/.pnpm/express@4.21.1/node_modules/express/lib/router/route.js:216:15)
+    at proto.<computed> [as get] (/home/scorp39/programmes/crex-ser/node_modules/.pnpm/express@4.21.1/node_modules/express/lib/router/index.js:521:19)
+    at Object.<anonymous> (/home/scorp39/programmes/crex-ser/routes/navRoutes.js:11:8)
+    at Module._compile (node:internal/modules/cjs/loader:1467:14)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1551:10)
+    at Module.load (node:internal/modules/cjs/loader:1282:32)
+    at Module._load (node:internal/modules/cjs/loader:1098:12)
+    at TracingChannel.traceSync (node:diagnostics_channel:315:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:215:24)
+    at Module.require (node:internal/modules/cjs/loader:1304:12)
+2024-11-22T03:04:09.163Z - UNCAUGHT_EXCEPTION received. Starting graceful shutdown...
+2024-11-22T03:04:09.163Z - Navigation scraper shutting down gracefully
+2024-11-22T03:04:22.512Z - Navigation scraper cron job initialized successfully
+2024-11-22T03:04:28.946Z - Navigation scraper cron job initialized successfully
+2024-11-22T03:04:35.975Z - Navigation scraper cron job initialized successfully
+2024-11-22T03:04:37.658Z - Navigation scraper cron job initialized successfully
+2024-11-22T03:04:40.836Z - Navigation scraper cron job initialized successfully
+2024-11-22T03:04:48.010Z - Navigation scraper cron job initialized successfully
+2024-11-22T03:04:55.286Z - Navigation scraper cron job initialized successfully
+2024-11-22T03:04:56.493Z - Navigation scraper cron job initialized successfully

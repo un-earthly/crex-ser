@@ -1,0 +1,12 @@
+2024-11-22T03:04:09.163Z - Uncaught Exception: Route.get() requires a callback function but got a [object Object]
+2024-11-22T03:04:09.163Z - Stack trace: Error: Route.get() requires a callback function but got a [object Object]
+    at Route.<computed> [as get] (/home/scorp39/programmes/crex-ser/node_modules/.pnpm/express@4.21.1/node_modules/express/lib/router/route.js:216:15)
+    at proto.<computed> [as get] (/home/scorp39/programmes/crex-ser/node_modules/.pnpm/express@4.21.1/node_modules/express/lib/router/index.js:521:19)
+    at Object.<anonymous> (/home/scorp39/programmes/crex-ser/routes/navRoutes.js:11:8)
+    at Module._compile (node:internal/modules/cjs/loader:1467:14)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1551:10)
+    at Module.load (node:internal/modules/cjs/loader:1282:32)
+    at Module._load (node:internal/modules/cjs/loader:1098:12)
+    at TracingChannel.traceSync (node:diagnostics_channel:315:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:215:24)
+    at Module.require (node:internal/modules/cjs/loader:1304:12)
